@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+:root {
+  --navy: #173a5e;
+  --blue: #2f78c8;
+  --muted: #5a7799;
+  --pale: #e7f1fb;
+  --surface: #f4f8fd;
+  --line: #e7f1fb;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  background: #fff;
+}
+body {
+  margin: 0;
+  color: var(--navy);
+  background: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button,
+a,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+/* Ẩn thanh cuộn (scrollbar/rule) trên toàn bộ hệ thống nhưng vẫn giữ chức năng cuộn mượt mà */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar,
+::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.card {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 1px 2px rgba(23, 58, 94, 0.035);
+}
+.page {
+  width: 100%;
+  max-width: 1120px;
+  padding: 2rem;
+}
+.eyebrow {
+  color: var(--blue);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.page-title {
+  color: var(--navy);
+  font-size: 1.25rem;
+  line-height: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.page-subtitle {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 0.75rem;
+  border: 0;
+  background: var(--blue);
+  padding: 0.65rem 1rem;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.btn-primary:hover {
+  background: #2563a6;
+}
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: white;
+  padding: 0.55rem 0.9rem;
+  color: var(--navy);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.field {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  padding: 0.7rem 0.85rem;
+  color: var(--navy);
+  font-size: 0.75rem;
+  outline: none;
+}
+.field:focus {
+  border-color: var(--blue);
+  background: white;
+  box-shadow: 0 0 0 1px var(--blue);
+}
+.chip {
+  white-space: nowrap;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  padding: 0.45rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chip-active {
+  background: white;
+  color: var(--navy);
+  box-shadow: 0 1px 3px rgba(23, 58, 94, 0.1);
+}
+@media (max-width: 640px) {
+  .page {
+    padding: 1rem;
+  }
+  .page-title {
+    font-size: 1.1rem;
+  }
+}
