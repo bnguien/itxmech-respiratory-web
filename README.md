@@ -1,4 +1,4 @@
-<h1 align="center">ITxMech Respiratory Web</h1>
+<h1 align="center">ITxMECH Respiratory Web</h1>
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111827)
@@ -8,13 +8,13 @@
 ![Vercel](https://img.shields.io/badge/Vercel-Deployment-black?logo=vercel&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-> Web dashboard for **ITxMech RespiratoryWeb** — an AIoT respiratory monitoring system focused on **SpO₂ tracking**, **digital lung sound recordings**, **AI-assisted respiratory cycle classification**, and **doctor review**.
+> Web dashboard for **ITxMECH RespiratoryWeb** — an AIoT respiratory monitoring system focused on **SpO₂ tracking**, **digital lung sound recordings**, **AI-assisted respiratory cycle classification**, and **doctor review**.
 
 ---
 
 ## Overview
 
-**ITxMech RespiCare Web** is the doctor-facing web application of the ITxMech respiratory AIoT system.
+**ITxMECH RespiCare Web** is the doctor-facing web application of the ITxMech respiratory AIoT system.
 
 The system is designed around a focused clinical workflow:
 
@@ -150,10 +150,7 @@ The web only shows alerts relevant to the current project scope:
 |---|---|
 | Frontend | Next.js, React, TypeScript |
 | Styling | Tailwind CSS |
-| Charts | Recharts |
-| Audio Waveform | WaveSurfer.js |
 | Database | Supabase PostgreSQL |
-| Authentication | Supabase Auth |
 | File Storage | Supabase Storage |
 | Realtime | Supabase Realtime |
 | Web Backend | Next.js Route Handlers |
@@ -310,7 +307,7 @@ npm start
 
 ## Team
 
-**ITxMech**
+**ITxMECH**
 
 AIoT respiratory monitoring system with SpO₂ tracking, digital stethoscope recordings, AI-assisted lung sound classification, and doctor review.
 
