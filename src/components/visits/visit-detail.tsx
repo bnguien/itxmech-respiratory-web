@@ -16,7 +16,7 @@ export function VisitDetail({
   const recording =
     recordings.find((item) => item.id === visit.recordingId) || recordings[0];
   return (
-    <div className="page max-w-5xl space-y-6">
+    <div className="page w-full space-y-6">
       <Link
         href={`/patients/${patient.id}?tab=${returnTab}`}
         className="inline-flex items-center gap-1.5 text-xs font-bold text-[#5A7799] hover:text-[#2F78C8]"

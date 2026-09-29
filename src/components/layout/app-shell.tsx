@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "./app-sidebar";
 import { MobileHeader } from "./mobile-header";
+import { TopHeader } from "./top-header";
 import { DoctorPanel } from "./doctor-panel";
 import { MockVisitProvider } from "@/components/visits/mock-visit-context";
 
@@ -29,10 +30,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           )}
-          <main className="min-w-0 flex-1 overflow-y-auto bg-white">
-            {children}
-          </main>
-          {pathname === "/dashboard" && <DoctorPanel />}
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+            <TopHeader />
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              <main className="min-w-0 flex-1 overflow-y-auto bg-white">
+                {children}
+              </main>
+              {pathname === "/dashboard" && <DoctorPanel />}
+            </div>
+          </div>
         </div>
       </div>
     </MockVisitProvider>

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Brand } from "@/components/ui/brand";
@@ -29,17 +30,26 @@ export default function LoginPage() {
               defaultValue={doctor.email}
             />
           </label>
-          <label className="block text-xs font-semibold text-[#5A7799]">
-            Mật khẩu
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-[#5A7799]">
+                Mật khẩu
+              </span>
+              <Link
+                href="/forgot-password"
+                className="text-xs font-semibold text-[#2F78C8] hover:underline"
+              >
+                Quên mật khẩu?
+              </Link>
+            </div>
             <input
               type="password"
               className="field mt-1"
               defaultValue="respicare2026"
             />
-          </label>
+          </div>
           <button className="btn-primary w-full py-3">
             Đăng nhập
-            <ArrowRight size={15} />
           </button>
         </form>
         <div className="flex items-center justify-center gap-2 border-t border-[#E7F1FB] pt-5 text-[11px] text-[#5A7799]">

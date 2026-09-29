@@ -1,18 +1,31 @@
 import { Stethoscope } from "lucide-react";
 
-export function Brand({ compact = false }: { compact?: boolean }) {
+export function Brand({
+  compact = false,
+  inverted = false,
+}: {
+  compact?: boolean;
+  inverted?: boolean;
+}) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E7F1FB] text-[#2F78C8]">
-        <Stethoscope size={17} />
+    <div className="flex items-center gap-2.5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#E7F1FB] text-[#2F78C8] shadow-xs">
+        <Stethoscope size={19} />
       </div>
       {!compact && (
         <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[.17em] text-[#9EC9F3]">
-            ITxMech
+          <span className="block text-[10px] font-bold uppercase tracking-[.18em] text-[#9EC9F3]">
+            ITXMECH
           </span>
-          <strong className="block text-base leading-none tracking-tight text-[#173A5E]">
-            Respiratory<span className="text-[#2F78C8]">Care</span>
+          <strong
+            className={`block text-base leading-tight tracking-tight font-extrabold ${
+              inverted ? "text-white" : "text-[#173A5E]"
+            }`}
+          >
+            Respiratory
+            <span className={inverted ? "text-[#9EC9F3]" : "text-[#2F78C8]"}>
+              Care
+            </span>
           </strong>
         </div>
       )}
