@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Calendar as CalendarIcon,
   Check,
@@ -133,15 +133,98 @@ function getDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+function getInitialEvents(referenceDate: Date = new Date()): Record<string, ScheduleItem[]> {
+  const base: Record<string, ScheduleItem[]> = { ...INITIAL_EVENTS };
+  const todayKey = getDateKey(referenceDate);
+
+  if (!base[todayKey]) {
+    base[todayKey] = [
+      {
+        id: "ev-today-1",
+        time: "08:30",
+        title: "Đo lại SpO₂ & theo dõi hô hấp",
+        name: "Trần Văn Mạnh",
+        completed: true,
+      },
+      {
+        id: "ev-today-2",
+        time: "10:15",
+        title: "Kiểm tra bản ghi âm phổi",
+        name: "Phạm Đức Thành",
+        completed: false,
+      },
+      {
+        id: "ev-today-3",
+        time: "14:30",
+        title: "Hội chẩn ca COPD tiến triển",
+        name: "Đỗ Hữu Trí",
+        completed: false,
+      },
+    ];
+
+    const tomorrow = new Date(referenceDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = getDateKey(tomorrow);
+    if (!base[tomorrowKey]) {
+      base[tomorrowKey] = [
+        {
+          id: "ev-tmr-1",
+          time: "09:00",
+          title: "Khám định kỳ & đo SpO₂",
+          name: "Nguyễn Thị Lan",
+          completed: false,
+        },
+        {
+          id: "ev-tmr-2",
+          time: "15:30",
+          title: "Đánh giá hiệu quả thở oxy",
+          name: "Vũ Thị Mai",
+          completed: false,
+        },
+      ];
+    }
+
+    const yesterday = new Date(referenceDate);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayKey = getDateKey(yesterday);
+    if (!base[yesterdayKey]) {
+      base[yesterdayKey] = [
+        {
+          id: "ev-yest-1",
+          time: "09:00",
+          title: "Khám ban đầu & phân tích thở rít",
+          name: "Đỗ Hữu Trí",
+          completed: true,
+        },
+      ];
+    }
+  }
+
+  return base;
+}
+
 export function DoctorPanel() {
-  // Default date in mock system is September 27, 2026
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date(2026, 8, 27));
-  const [viewDate, setViewDate] = useState<Date>(new Date(2026, 8, 1));
-  const [events, setEvents] = useState<Record<string, ScheduleItem[]>>(INITIAL_EVENTS);
+  const [today, setToday] = useState<Date>(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [viewDate, setViewDate] = useState<Date>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [events, setEvents] = useState<Record<string, ScheduleItem[]>>(() =>
+    getInitialEvents()
+  );
   const [isAdding, setIsAdding] = useState(false);
   const [newTime, setNewTime] = useState("09:00");
   const [newTitle, setNewTitle] = useState("");
   const [newName, setNewName] = useState("");
+
+  useEffect(() => {
+    const now = new Date();
+    setToday(now);
+    setSelectedDate(now);
+    setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    setEvents(getInitialEvents(now));
+  }, []);
 
   const currentYear = viewDate.getFullYear();
   const currentMonth = viewDate.getMonth();
@@ -155,9 +238,10 @@ export function DoctorPanel() {
   };
 
   const handleGoToToday = () => {
-    const today = new Date(2026, 8, 27);
-    setSelectedDate(today);
-    setViewDate(new Date(2026, 8, 1));
+    const now = new Date();
+    setToday(now);
+    setSelectedDate(now);
+    setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
   };
 
   const handleSelectDate = (date: Date) => {
@@ -249,7 +333,8 @@ export function DoctorPanel() {
   };
 
   const isViewingCurrentDateMonth =
-    viewDate.getFullYear() === 2026 && viewDate.getMonth() === 8;
+    viewDate.getFullYear() === today.getFullYear() &&
+    viewDate.getMonth() === today.getMonth();
 
   return (
     <aside className="hidden h-full w-80 shrink-0 overflow-y-auto border-l border-[#E7F1FB] bg-white p-6 xl:block">
@@ -286,7 +371,7 @@ export function DoctorPanel() {
               <button
                 type="button"
                 onClick={handleGoToToday}
-                title="Về tháng hiện tại (Tháng 9/2026)"
+                title={`Về tháng hiện tại (Tháng ${today.getMonth() + 1}/${today.getFullYear()})`}
                 className="rounded-lg border border-[#CCE2F7] bg-[#F4F8FD] px-2 py-1 text-[10px] font-bold text-[#2F78C8] transition hover:bg-[#E7F1FB]"
               >
                 Hôm nay
@@ -331,9 +416,9 @@ export function DoctorPanel() {
               cell.date.getDate() === selectedDate.getDate();
 
             const isToday =
-              cell.date.getFullYear() === 2026 &&
-              cell.date.getMonth() === 8 &&
-              cell.date.getDate() === 27;
+              cell.date.getFullYear() === today.getFullYear() &&
+              cell.date.getMonth() === today.getMonth() &&
+              cell.date.getDate() === today.getDate();
 
             const cellKey = getDateKey(cell.date);
             const hasEvent = (events[cellKey] || []).length > 0;
