@@ -41,7 +41,7 @@ export function SettingsView() {
   };
 
   return (
-    <div className="page max-w-4xl space-y-6">
+    <div className="page w-full space-y-6">
       <PageHeader
         title="Cài đặt hệ thống"
         description="Quản lý tài khoản bác sĩ và cấu hình cảnh báo lâm sàng"

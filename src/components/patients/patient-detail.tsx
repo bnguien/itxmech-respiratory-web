@@ -485,22 +485,36 @@ export function PatientDetail({
 
       {tab === "spo2" && <Spo2Monitor />}
       {tab === "sound" && (
-        <div className="card mt-8 divide-y divide-[#E7F1FB] overflow-hidden">
-          {patientRecordings.map((recording) => (
-            <Link
-              key={recording.id}
-              href={`/recordings/${recording.id}?from=patient&patientId=${patient.id}&tab=sound`}
-              className="flex items-center justify-between p-5 hover:bg-[#F4F8FD]"
-            >
-              <span>
-                <b>{recording.recordedAt}</b>
-                <small className="mt-1 block text-[#5A7799]">
+        <div className="card mt-8 overflow-hidden">
+          <div className="hidden sm:grid grid-cols-[1fr_180px_160px] items-center gap-4 border-b border-[#E7F1FB] bg-[#F8FAFD] px-5 py-3 text-xs font-bold uppercase tracking-wider text-[#5A7799]">
+            <div>Thời điểm & Chi tiết</div>
+            <div className="text-center">Chu kỳ ghi âm</div>
+            <div className="text-right">Phân loại AI</div>
+          </div>
+          <div className="divide-y divide-[#E7F1FB]">
+            {patientRecordings.map((recording) => (
+              <Link
+                key={recording.id}
+                href={`/recordings/${recording.id}?from=patient&patientId=${patient.id}&tab=sound`}
+                className="grid grid-cols-1 sm:grid-cols-[1fr_180px_160px] items-center gap-4 p-5 transition hover:bg-[#F4F8FD]"
+              >
+                <div>
+                  <b className="text-sm font-bold text-[#173A5E]">{recording.recordedAt}</b>
+                  <span className="mt-0.5 block text-xs text-[#5A7799]">
+                    Mã: {recording.id} · Thiết bị: {recording.deviceId}
+                  </span>
+                </div>
+                <div className="text-center text-xs font-bold text-[#5A7799]">
                   {recording.duration}s · {recording.cycles.length} chu kỳ
-                </small>
-              </span>
-              <b className="text-[#EF4444]">{recording.classification}</b>
-            </Link>
-          ))}
+                </div>
+                <div className="flex justify-end">
+                  <span className="inline-flex rounded-full bg-red-50 border border-red-200/80 px-3 py-1 text-xs font-extrabold text-[#EF4444]">
+                    {recording.classification}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
       {tab === "history" && <VisitHistory patient={patient} visits={visits} />}
