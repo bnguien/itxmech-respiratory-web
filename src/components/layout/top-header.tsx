@@ -13,10 +13,21 @@ import {
   User,
   X,
 } from "lucide-react";
-import { doctor, alerts, patients } from "@/constants/mock-data";
+import { alerts, patients } from "@/constants/mock-data";
+import { LogoutButton } from "@/components/auth/logout-button";
+import { useDoctorProfile } from "@/components/auth/doctor-profile-context";
+import {
+  getDoctorDisplayName,
+  getDoctorSubtitle,
+  getInitials,
+} from "@/lib/auth/profile";
 
 export function TopHeader() {
   const pathname = usePathname();
+  const { profile } = useDoctorProfile();
+  const doctorName = getDoctorDisplayName(profile);
+  const doctorSubtitle = getDoctorSubtitle(profile);
+  const doctorInitials = getInitials(doctorName);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
@@ -76,7 +87,7 @@ export function TopHeader() {
           <h1 className="text-base font-extrabold tracking-tight text-[#173A5E]">
             {greeting},{" "}
             <span className="text-[#2F78C8]">
-              {doctor.name.replace("BS. ", "")}
+              {doctorName.replace(/^BS\.?\s*/i, "")}
             </span>
             !
           </h1>
@@ -267,7 +278,7 @@ export function TopHeader() {
             {/* Avatar circle matching reference */}
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-[#173A5E] to-[#2F78C8] p-[2px] shadow-xs">
               <span className="flex h-full w-full items-center justify-center rounded-full bg-[#E7F1FB] text-xs font-black text-[#2F78C8]">
-                BN
+                {doctorInitials}
               </span>
             </div>
             <ChevronDown
@@ -284,14 +295,14 @@ export function TopHeader() {
               {/* Doctor Details */}
               <div className="flex items-center gap-3 rounded-xl bg-[#F4F8FD] p-2.5">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2F78C8] text-xs font-bold text-white">
-                  BN
+                  {doctorInitials}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-extrabold text-[#173A5E]">
-                    {doctor.name}
+                    {doctorName}
                   </p>
                   <p className="truncate text-[10px] text-[#5A7799]">
-                    {doctor.department}
+                    {doctorSubtitle}
                   </p>
                 </div>
               </div>
@@ -325,14 +336,13 @@ export function TopHeader() {
 
                 <div className="my-1 border-t border-[#E7F1FB]" />
 
-                <Link
-                  href="/login"
-                  onClick={() => setProfileOpen(false)}
+                <LogoutButton
+                  onLogout={() => setProfileOpen(false)}
                   className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                 >
                   <LogOut size={15} />
                   <span>Đăng xuất</span>
-                </Link>
+                </LogoutButton>
               </div>
             </div>
           )}

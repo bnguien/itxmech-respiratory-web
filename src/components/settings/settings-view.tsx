@@ -1,11 +1,21 @@
 "use client";
 import { useState } from "react";
 import { Check, Eye, EyeOff, KeyRound } from "lucide-react";
-import { doctor } from "@/constants/mock-data";
 import { PageHeader } from "@/components/ui/page-header";
+import { useDoctorProfile } from "@/components/auth/doctor-profile-context";
+import { createClient } from "@/lib/supabase/client";
 
 export function SettingsView() {
+  const { email, profile, setProfile } = useDoctorProfile();
   const [saved, setSaved] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [fullName, setFullName] = useState(profile?.full_name ?? "");
+  const [professionalTitle, setProfessionalTitle] = useState(
+    profile?.professional_title ?? "",
+  );
+  const [specialty, setSpecialty] = useState(profile?.specialty ?? "");
+  const [department, setDepartment] = useState(profile?.department ?? "");
   const [checks, setChecks] = useState([true, true, true, true]);
 
   // Change password states
@@ -17,26 +27,109 @@ export function SettingsView() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState({
+    current: false,
+    next: false,
+    confirm: false,
+  });
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const currentPwError = !currentPw ? "Vui lòng nhập mật khẩu hiện tại." : "";
+  const newPwError = !newPw
+    ? "Vui lòng nhập mật khẩu mới."
+    : newPw.length < 8
+      ? "Mật khẩu mới phải có ít nhất 8 ký tự."
+      : !/\d/.test(newPw)
+        ? "Mật khẩu mới phải chứa ít nhất 1 chữ số."
+        : newPw === currentPw
+          ? "Mật khẩu mới phải khác mật khẩu hiện tại."
+          : "";
+  const confirmPwError = !confirmPw
+    ? "Vui lòng xác nhận mật khẩu mới."
+    : confirmPw !== newPw
+      ? "Mật khẩu xác nhận không khớp với mật khẩu mới."
+      : "";
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPw) {
-      setPwError("Vui lòng nhập mật khẩu hiện tại.");
+    setProfileError("");
+
+    if (!profile) {
+      setProfileError("Không tìm thấy hồ sơ bác sĩ. Vui lòng liên hệ quản trị viên.");
       return;
     }
-    if (newPw.length < 6) {
-      setPwError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+
+    if (!fullName.trim()) {
+      setProfileError("Vui lòng nhập họ và tên bác sĩ.");
       return;
     }
-    if (newPw !== confirmPw) {
-      setPwError("Mật khẩu xác nhận không khớp với mật khẩu mới.");
+
+    setIsSavingProfile(true);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("doctor_profiles")
+      .update({
+        full_name: fullName.trim(),
+        professional_title: professionalTitle.trim() || null,
+        specialty: specialty.trim() || null,
+        department: department.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", profile.id)
+      .select()
+      .single();
+
+    setIsSavingProfile(false);
+
+    if (error || !data) {
+      setProfileError("Không thể lưu hồ sơ bác sĩ. Vui lòng thử lại.");
       return;
     }
+
+    setProfile(data);
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1800);
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwSuccess(false);
+    setPasswordTouched({ current: true, next: true, confirm: true });
+    if (currentPwError || newPwError || confirmPwError) {
+      setPwError("");
+      return;
+    }
+
     setPwError("");
+    setIsChangingPassword(true);
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPw,
+    });
+
+    if (signInError) {
+      setPwError("Mật khẩu hiện tại không chính xác.");
+      setIsChangingPassword(false);
+      return;
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPw,
+    });
+
+    setIsChangingPassword(false);
+
+    if (updateError) {
+      setPwError("Không thể cập nhật mật khẩu. Vui lòng thử lại.");
+      return;
+    }
+
     setPwSuccess(true);
     setCurrentPw("");
     setNewPw("");
     setConfirmPw("");
+    setPasswordTouched({ current: false, next: false, confirm: false });
     setTimeout(() => setPwSuccess(false), 3000);
   };
 
@@ -46,37 +139,45 @@ export function SettingsView() {
         title="Cài đặt hệ thống"
         description="Quản lý tài khoản bác sĩ và cấu hình cảnh báo lâm sàng"
       />
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSaved(true);
-          setTimeout(() => setSaved(false), 1800);
-        }}
-        className="card space-y-5 p-6"
-      >
+      <form onSubmit={handleProfileSubmit} className="card space-y-5 p-6">
         <h2 className="text-sm font-bold">Thông tin bác sĩ</h2>
+        {profileError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-600">
+            {profileError}
+          </div>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
-          {[
-            ["Họ và tên bác sĩ", doctor.name, "text"],
-            ["Chức danh chuyên môn", "Bác sĩ chuyên khoa Hô hấp", "text"],
-            ["Chuyên khoa", doctor.department, "text"],
-            ["Email làm việc", doctor.email, "email"],
-          ].map(([label, value, type]) => (
-            <label key={label} className="text-xs font-bold text-[#5A7799]">
-              {label}
-              <input type={type} defaultValue={value} className="field mt-1" />
-            </label>
-          ))}
+          <label className="text-xs font-bold text-[#5A7799]">
+            Họ và tên bác sĩ
+            <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className="field mt-1" />
+          </label>
+          <label className="text-xs font-bold text-[#5A7799]">
+            Chức danh chuyên môn
+            <input value={professionalTitle} onChange={(e) => setProfessionalTitle(e.target.value)} className="field mt-1" />
+          </label>
+          <label className="text-xs font-bold text-[#5A7799]">
+            Chuyên khoa
+            <input value={specialty} onChange={(e) => setSpecialty(e.target.value)} className="field mt-1" />
+          </label>
+          <label className="text-xs font-bold text-[#5A7799]">
+            Khoa / phòng ban
+            <input value={department} onChange={(e) => setDepartment(e.target.value)} className="field mt-1" />
+          </label>
+          <label className="text-xs font-bold text-[#5A7799] sm:col-span-2">
+            Email làm việc
+            <input type="email" value={email} readOnly className="field mt-1 cursor-not-allowed bg-[#F4F8FD]" />
+          </label>
         </div>
         <div className="flex justify-end">
-          <button className="btn-primary">
-            {saved && <Check size={14} />} {saved ? "Đã lưu" : "Lưu thông tin"}
+          <button disabled={isSavingProfile} className="btn-primary disabled:cursor-not-allowed disabled:opacity-70">
+            {saved && <Check size={14} />} {saved ? "Đã lưu" : isSavingProfile ? "Đang lưu..." : "Lưu thông tin"}
           </button>
         </div>
       </form>
 
       {/* Đổi mật khẩu */}
       <form
+        noValidate
         onSubmit={handlePasswordSubmit}
         className="card space-y-5 p-6"
       >
@@ -116,20 +217,26 @@ export function SettingsView() {
                   setCurrentPw(e.target.value);
                   setPwError("");
                 }}
+                onBlur={() => setPasswordTouched((value) => ({ ...value, current: true }))}
+                aria-invalid={passwordTouched.current && Boolean(currentPwError)}
+                aria-describedby={passwordTouched.current && currentPwError ? "current-password-error" : undefined}
                 placeholder="••••••••"
-                className="field !pr-10 text-xs"
+                className={`field !pr-10 text-xs ${passwordTouched.current && currentPwError ? "border-red-400 focus:border-red-500" : ""}`}
                 style={{ paddingRight: "2.5rem" }}
-                required
               />
               <button
                 type="button"
                 onClick={() => setShowCurrent((v) => !v)}
+                aria-label={showCurrent ? "Ẩn mật khẩu hiện tại" : "Hiện mật khẩu hiện tại"}
+                aria-pressed={showCurrent}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#5A7799] hover:text-[#2F78C8]"
-                tabIndex={-1}
               >
                 {showCurrent ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
+            {passwordTouched.current && currentPwError && (
+              <span id="current-password-error" role="alert" className="mt-1 block text-xs font-medium text-red-600">{currentPwError}</span>
+            )}
           </label>
 
           <label className="text-xs font-bold text-[#5A7799]">
@@ -142,20 +249,26 @@ export function SettingsView() {
                   setNewPw(e.target.value);
                   setPwError("");
                 }}
-                placeholder="Tối thiểu 6 ký tự"
-                className="field !pr-10 text-xs"
+                onBlur={() => setPasswordTouched((value) => ({ ...value, next: true }))}
+                aria-invalid={passwordTouched.next && Boolean(newPwError)}
+                aria-describedby={passwordTouched.next && newPwError ? "new-password-error" : undefined}
+                placeholder="Tối thiểu 8 ký tự"
+                className={`field !pr-10 text-xs ${passwordTouched.next && newPwError ? "border-red-400 focus:border-red-500" : ""}`}
                 style={{ paddingRight: "2.5rem" }}
-                required
               />
               <button
                 type="button"
                 onClick={() => setShowNew((v) => !v)}
+                aria-label={showNew ? "Ẩn mật khẩu mới" : "Hiện mật khẩu mới"}
+                aria-pressed={showNew}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#5A7799] hover:text-[#2F78C8]"
-                tabIndex={-1}
               >
                 {showNew ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
+            {passwordTouched.next && newPwError && (
+              <span id="new-password-error" role="alert" className="mt-1 block text-xs font-medium text-red-600">{newPwError}</span>
+            )}
           </label>
 
           <label className="text-xs font-bold text-[#5A7799]">
@@ -168,26 +281,32 @@ export function SettingsView() {
                   setConfirmPw(e.target.value);
                   setPwError("");
                 }}
+                onBlur={() => setPasswordTouched((value) => ({ ...value, confirm: true }))}
+                aria-invalid={passwordTouched.confirm && Boolean(confirmPwError)}
+                aria-describedby={passwordTouched.confirm && confirmPwError ? "confirm-password-error" : undefined}
                 placeholder="Nhập lại mật khẩu mới"
-                className="field !pr-10 text-xs"
+                className={`field !pr-10 text-xs ${passwordTouched.confirm && confirmPwError ? "border-red-400 focus:border-red-500" : ""}`}
                 style={{ paddingRight: "2.5rem" }}
-                required
               />
               <button
                 type="button"
                 onClick={() => setShowConfirm((v) => !v)}
+                aria-label={showConfirm ? "Ẩn mật khẩu xác nhận" : "Hiện mật khẩu xác nhận"}
+                aria-pressed={showConfirm}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#5A7799] hover:text-[#2F78C8]"
-                tabIndex={-1}
               >
                 {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
+            {passwordTouched.confirm && confirmPwError && (
+              <span id="confirm-password-error" role="alert" className="mt-1 block text-xs font-medium text-red-600">{confirmPwError}</span>
+            )}
           </label>
         </div>
 
         <div className="flex justify-end">
-          <button type="submit" className="btn-primary">
-            {pwSuccess ? "Đã cập nhật" : "Cập nhật mật khẩu"}
+          <button type="submit" disabled={isChangingPassword} className="btn-primary disabled:cursor-not-allowed disabled:opacity-70">
+            {pwSuccess ? "Đã cập nhật" : isChangingPassword ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
           </button>
         </div>
       </form>

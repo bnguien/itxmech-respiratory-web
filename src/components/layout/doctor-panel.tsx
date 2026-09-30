@@ -10,7 +10,12 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { doctor } from "@/constants/mock-data";
+import { useDoctorProfile } from "@/components/auth/doctor-profile-context";
+import {
+  getDoctorDisplayName,
+  getDoctorSubtitle,
+  getInitials,
+} from "@/lib/auth/profile";
 
 interface ScheduleItem {
   id: string;
@@ -204,6 +209,10 @@ function getInitialEvents(referenceDate: Date = new Date()): Record<string, Sche
 }
 
 export function DoctorPanel() {
+  const { profile } = useDoctorProfile();
+  const doctorName = getDoctorDisplayName(profile);
+  const doctorSubtitle = getDoctorSubtitle(profile);
+  const doctorInitials = getInitials(doctorName);
   const [today, setToday] = useState<Date>(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [viewDate, setViewDate] = useState<Date>(() => {
@@ -343,15 +352,15 @@ export function DoctorPanel() {
         <div className="mt-5 text-center">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-tr from-[#173A5E] via-[#2F78C8] to-[#9EC9F3] p-[3px] shadow-[0_8px_24px_rgba(47,120,200,.25)]">
             <span className="flex h-full w-full items-center justify-center rounded-full border-2 border-white bg-[#E7F1FB] text-lg font-extrabold text-[#2F78C8]">
-              BN
+              {doctorInitials}
             </span>
           </div>
-          <h3 className="mt-3 text-base font-extrabold">{doctor.name}</h3>
+          <h3 className="mt-3 text-base font-extrabold">{doctorName}</h3>
           <p className="mt-1 text-xs text-[#5A7799]">
-            Bác sĩ chuyên khoa Hô hấp
+            {profile?.professional_title || "Bác sĩ"}
           </p>
           <span className="mt-2 inline-block rounded-full border border-[#9EC9F3]/40 bg-[#E7F1FB] px-2.5 py-1 text-[10px] font-bold text-[#2F78C8]">
-            {doctor.department}
+            {doctorSubtitle}
           </span>
         </div>
       </section>
