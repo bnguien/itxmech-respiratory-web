@@ -6,13 +6,22 @@ import { MobileHeader } from "./mobile-header";
 import { TopHeader } from "./top-header";
 import { DoctorPanel } from "./doctor-panel";
 import { MockVisitProvider } from "@/components/visits/mock-visit-context";
+import { DoctorProfileProvider } from "@/components/auth/doctor-profile-context";
+import type { AuthenticatedDoctor } from "@/types/auth";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  doctor,
+}: {
+  children: React.ReactNode;
+  doctor: AuthenticatedDoctor;
+}) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   return (
-    <MockVisitProvider>
-      <div className="flex h-screen w-full flex-col overflow-hidden bg-white">
+    <DoctorProfileProvider doctor={doctor}>
+      <MockVisitProvider>
+        <div className="flex h-screen w-full flex-col overflow-hidden bg-white">
         <MobileHeader onMenu={() => setOpen(true)} />
         <div className="flex min-h-0 flex-1">
           <div className="hidden h-full lg:block">
@@ -40,7 +49,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </div>
-      </div>
-    </MockVisitProvider>
+        </div>
+      </MockVisitProvider>
+    </DoctorProfileProvider>
   );
 }

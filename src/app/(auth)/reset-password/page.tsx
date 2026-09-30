@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
 import { Brand } from "@/components/ui/brand";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -15,12 +16,33 @@ export default function ResetPasswordPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [hasRecoverySession, setHasRecoverySession] = useState(false);
+  const [isLeavingRecovery, setIsLeavingRecovery] = useState(false);
 
   const hasMinLength = newPassword.length >= 8;
   const hasNumber = /\d/.test(newPassword);
   const isMatching = newPassword !== "" && newPassword === confirmPassword;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const supabase = createClient();
+    void supabase.auth.getUser().then(({ data }) => {
+      setHasRecoverySession(Boolean(data.user));
+      setIsCheckingSession(false);
+    });
+  }, []);
+
+  const handleBackToLogin = async () => {
+    if (isLeavingRecovery) return;
+
+    setIsLeavingRecovery(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
 
@@ -38,11 +60,20 @@ export default function ResetPasswordPage() {
     }
 
     setIsLoading(true);
-    // Simulate updating password
-    setTimeout(() => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+      setErrorMsg(
+        "Không thể cập nhật mật khẩu. Liên kết khôi phục có thể đã hết hạn.",
+      );
       setIsLoading(false);
-      setIsSuccess(true);
-    }, 800);
+      return;
+    }
+
+    await supabase.auth.signOut();
+    setIsLoading(false);
+    setIsSuccess(true);
   };
 
   return (
@@ -56,7 +87,23 @@ export default function ResetPasswordPage() {
           </p>
         </div>
 
-        {!isSuccess ? (
+        {isCheckingSession ? (
+          <p className="py-8 text-center text-xs text-[#5A7799]">
+            Đang kiểm tra liên kết khôi phục...
+          </p>
+        ) : !hasRecoverySession ? (
+          <div className="space-y-4 text-center">
+            <h1 className="text-lg font-extrabold text-[#173A5E]">
+              Liên kết không hợp lệ
+            </h1>
+            <p className="text-xs leading-relaxed text-[#5A7799]">
+              Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.
+            </p>
+            <Link href="/forgot-password" className="btn-primary w-full py-2.5 text-xs font-bold">
+              Yêu cầu liên kết mới
+            </Link>
+          </div>
+        ) : !isSuccess ? (
           <>
             <div className="space-y-1 text-center">
               <h1 className="text-lg font-extrabold text-[#173A5E]">
@@ -81,6 +128,8 @@ export default function ResetPasswordPage() {
                   <input
                     type={showPassword ? "text" : "password"}
                     required
+                    name="new-password"
+                    autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Nhập mật khẩu mới"
@@ -94,6 +143,8 @@ export default function ResetPasswordPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Ẩn mật khẩu mới" : "Hiện mật khẩu mới"}
+                    aria-pressed={showPassword}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#5A7799] hover:text-[#173A5E]"
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -108,6 +159,8 @@ export default function ResetPasswordPage() {
                   <input
                     type={showConfirm ? "text" : "password"}
                     required
+                    name="confirm-password"
+                    autoComplete="new-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Nhập lại mật khẩu mới"
@@ -121,6 +174,8 @@ export default function ResetPasswordPage() {
                   <button
                     type="button"
                     onClick={() => setShowConfirm(!showConfirm)}
+                    aria-label={showConfirm ? "Ẩn mật khẩu xác nhận" : "Hiện mật khẩu xác nhận"}
+                    aria-pressed={showConfirm}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#5A7799] hover:text-[#173A5E]"
                   >
                     {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -195,10 +250,11 @@ export default function ResetPasswordPage() {
             <div className="pt-2">
               <button
                 type="button"
-                onClick={() => router.push("/login")}
+                onClick={handleBackToLogin}
+                disabled={isLeavingRecovery}
                 className="btn-primary w-full py-2.5 text-xs font-bold"
               >
-                Đăng nhập ngay
+                {isLeavingRecovery ? "Đang quay lại..." : "Đăng nhập ngay"}
               </button>
             </div>
           </div>
@@ -206,12 +262,14 @@ export default function ResetPasswordPage() {
 
         {/* Back to Login link */}
         <div className="text-center">
-          <Link
-            href="/login"
+          <button
+            type="button"
+            onClick={handleBackToLogin}
+            disabled={isLeavingRecovery}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2F78C8] hover:underline"
           >
-            <span>Quay lại Đăng nhập</span>
-          </Link>
+            <span>{isLeavingRecovery ? "Đang quay lại..." : "Quay lại Đăng nhập"}</span>
+          </button>
         </div>
 
         {/* Security badge footer */}

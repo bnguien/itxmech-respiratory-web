@@ -1,8 +1,12 @@
 import { AppShell } from "@/components/layout/app-shell";
-export default function DashboardLayout({
+import { requireAuthenticatedDoctor } from "@/lib/auth/server";
+
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AppShell>{children}</AppShell>;
+  const doctor = await requireAuthenticatedDoctor();
+
+  return <AppShell doctor={doctor}>{children}</AppShell>;
 }

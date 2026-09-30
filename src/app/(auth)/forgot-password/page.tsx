@@ -2,23 +2,45 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CheckCircle2, Mail, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, Mail, ShieldCheck } from "lucide-react";
 import { Brand } from "@/components/ui/brand";
-import { doctor } from "@/constants/mock-data";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState(doctor.email);
+  const [email, setEmail] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [errorMessage, setErrorMessage] = useState("");
+  const [emailTouched, setEmailTouched] = useState(false);
+  const emailError = !email.trim()
+    ? "Vui lòng nhập email."
+    : !/^\S+@\S+\.\S+$/.test(email.trim())
+      ? "Email không đúng định dạng."
+      : "";
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage("");
+    setEmailTouched(true);
+    if (emailError) return;
     setIsLoading(true);
-    // Simulate sending reset email
-    setTimeout(() => {
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    });
+
+    if (error) {
       setIsLoading(false);
-      setIsSubmitted(true);
-    }, 700);
+      setErrorMessage(
+        "Chưa thể gửi liên kết đặt lại mật khẩu. Vui lòng thử lại sau.",
+      );
+      return;
+    }
+
+    setIsLoading(false);
+    setIsSubmitted(true);
   };
 
   return (
@@ -43,17 +65,33 @@ export default function ForgotPasswordPage() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {errorMessage && (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-center text-xs font-semibold text-red-600"
+              >
+                {errorMessage}
+              </div>
+            )}
+
+            <form noValidate onSubmit={handleSubmit} className="space-y-4">
               <label className="block text-xs font-semibold text-[#5A7799]">
                 Email tài khoản
                 <div className="relative mt-1">
                   <input
                     type="email"
-                    required
+                    name="email"
+                    autoComplete="email"
+                    aria-invalid={emailTouched && Boolean(emailError)}
+                    aria-describedby={emailTouched && emailError ? "forgot-email-error" : undefined}
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setErrorMessage("");
+                    }}
+                    onBlur={() => setEmailTouched(true)}
                     placeholder="bacsi@respicare.med.vn"
-                    className="field field-has-icon-left !pl-10.5"
+                    className={`field field-has-icon-left !pl-10.5 ${emailTouched && emailError ? "border-red-400 focus:border-red-500" : ""}`}
                     style={{ paddingLeft: "2.6rem" }}
                   />
                   <Mail
@@ -61,6 +99,11 @@ export default function ForgotPasswordPage() {
                     className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9EC9F3]"
                   />
                 </div>
+                {emailTouched && emailError && (
+                  <span id="forgot-email-error" role="alert" className="mt-1 block text-xs font-medium text-red-600">
+                    {emailError}
+                  </span>
+                )}
               </label>
 
               <button
@@ -95,14 +138,9 @@ export default function ForgotPasswordPage() {
               </p>
             </div>
 
-            <div className="pt-2">
-              <Link
-                href="/reset-password"
-                className="btn-primary w-full py-2.5 text-xs font-bold"
-              >
-                Tiếp tục đến trang đặt lại mật khẩu
-              </Link>
-            </div>
+            <p className="text-[11px] text-[#5A7799]">
+              Liên kết trong email sẽ đưa bạn đến trang đặt lại mật khẩu an toàn.
+            </p>
           </div>
         )}
 

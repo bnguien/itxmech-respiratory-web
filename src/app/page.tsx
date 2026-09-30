@@ -1,4 +1,7 @@
 import { redirect } from "next/navigation";
-export default function Home() {
-  redirect("/login");
+import { getAuthenticatedDoctor } from "@/lib/auth/server";
+
+export default async function Home() {
+  const doctor = await getAuthenticatedDoctor();
+  redirect(doctor ? "/dashboard" : "/login");
 }

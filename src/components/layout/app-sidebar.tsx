@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Cpu, LogOut, X } from "lucide-react";
 import { navigation } from "@/constants/navigation";
 import { Brand } from "@/components/ui/brand";
+import { LogoutButton } from "@/components/auth/logout-button";
 
 export function AppSidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
@@ -268,15 +269,14 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       <div className="px-3.5 space-y-3 border-t border-white/10 pt-4">
-        <Link
-          href="/login"
+        <LogoutButton
           title={isCompact ? "Đăng xuất" : undefined}
           className={`group flex h-10 items-center rounded-xl text-sm font-normal text-blue-100/80 hover:bg-white/10 hover:text-white transition whitespace-nowrap overflow-hidden ${isCompact ? "justify-center px-2" : "gap-3 px-3"
             }`}
         >
           <LogOut size={16} strokeWidth={1.75} className="shrink-0 text-[#9EC9F3] group-hover:text-white transition-colors" />
           {!isCompact && <span className="truncate font-normal text-blue-100/80 group-hover:text-white">Đăng xuất</span>}
-        </Link>
+        </LogoutButton>
       </div>
 
       {/* Drag resize handle & Hover expand/collapse button */}
