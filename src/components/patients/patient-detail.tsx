@@ -3,7 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Check, ExternalLink, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  Check,
+  ExternalLink,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { Patient, Recording } from "@/types/clinical";
 import { Spo2Chart } from "@/components/dashboard/spo2-chart";
 import { AudioWaveform } from "@/components/recordings/audio-waveform";
@@ -52,9 +62,21 @@ interface PatientNote {
 export function PatientDetail({
   patient,
   patientRecordings,
+  onEdit,
+  onArchive,
+  onRestore,
+  isArchived = false,
+  restoring = false,
+  hasClinicalData = true,
 }: {
   patient: Patient;
   patientRecordings: Recording[];
+  onEdit?: () => void;
+  onArchive?: () => void;
+  onRestore?: () => void;
+  isArchived?: boolean;
+  restoring?: boolean;
+  hasClinicalData?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -87,7 +109,7 @@ export function PatientDetail({
   const [editingNoteText, setEditingNoteText] = useState("");
 
   const handleAddNote = () => {
-    if (!newNoteText.trim()) return;
+    if (isArchived || !newNoteText.trim()) return;
     const newNote: PatientNote = {
       id: `note-${Date.now()}`,
       content: newNoteText.trim(),
@@ -100,21 +122,22 @@ export function PatientDetail({
   };
 
   const handleStartEditNote = (note: PatientNote) => {
+    if (isArchived) return;
     setEditingNoteId(note.id);
     setEditingNoteText(note.content);
   };
 
   const handleSaveEditNote = (noteId: string) => {
-    if (!editingNoteText.trim()) return;
+    if (isArchived || !editingNoteText.trim()) return;
     const nowTimestamp = getCurrentTimestamp();
     setNotes((prev) => {
       const updated = prev.map((n) =>
         n.id === noteId
           ? {
-            ...n,
-            content: editingNoteText.trim(),
-            createdAt: nowTimestamp,
-          }
+              ...n,
+              content: editingNoteText.trim(),
+              createdAt: nowTimestamp,
+            }
           : n,
       );
       const editedItem = updated.find((n) => n.id === noteId);
@@ -131,6 +154,7 @@ export function PatientDetail({
   };
 
   const handleDeleteNote = (noteId: string) => {
+    if (isArchived) return;
     setNotes((prev) => prev.filter((n) => n.id !== noteId));
     if (editingNoteId === noteId) {
       setEditingNoteId(null);
@@ -165,7 +189,7 @@ export function PatientDetail({
   };
 
   return (
-    <div className="w-full p-5 sm:p-8 lg:p-12">
+    <div className="w-full px-5 pb-5 pt-3 sm:px-8 sm:pb-8 sm:pt-5 lg:px-12 lg:pb-12 lg:pt-6">
       <Link
         href="/patients"
         className="inline-flex items-center gap-2 text-sm font-semibold text-[#5A7799] hover:text-[#2F78C8]"
@@ -188,19 +212,39 @@ export function PatientDetail({
               <h1 className="text-2xl font-extrabold tracking-tight text-[#173A5E]">
                 {patient.name}
               </h1>
-              <span className="rounded-lg bg-[#F1F6FB] px-3 py-1 font-mono text-sm text-[#5A7799]">
-                {patient.code}
-              </span>
+              {isArchived && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Đã lưu trữ</span>}
+              <div className="flex shrink-0 items-center gap-2">
+                {onEdit && (
+                  <button type="button" onClick={onEdit} className="btn-secondary whitespace-nowrap px-4 py-2.5 text-sm text-[#2F78C8]">
+                    <Pencil size={16} />
+                    Chỉnh sửa
+                  </button>
+                )}
+                {onArchive && (
+                  <button type="button" onClick={onArchive} className="btn-secondary whitespace-nowrap px-4 py-2.5 text-sm text-[#2F78C8]">
+                    <Archive size={16} />
+                    Lưu trữ
+                  </button>
+                )}
+                {onRestore && (
+                  <button type="button" onClick={onRestore} disabled={restoring} className="btn-primary whitespace-nowrap px-4 py-2.5 text-sm disabled:opacity-60">
+                    <RotateCcw size={16} />
+                    {restoring ? "Đang khôi phục..." : "Khôi phục hồ sơ"}
+                  </button>
+                )}
+              </div>
             </div>
+            <span className="mt-2 inline-flex rounded-md bg-[#F1F6FB] px-2.5 py-1 font-mono text-xs text-[#5A7799]">
+              {patient.code}
+            </span>
             <p className="mt-2 text-sm text-[#5A7799]">
               {patient.age} tuổi&nbsp;&nbsp;·&nbsp;&nbsp;{patient.gender}
               &nbsp;&nbsp;·&nbsp;&nbsp;{patient.phone}
             </p>
             <p className="mt-3 text-sm">
               <span className="text-[#8BBCEC]">Chẩn đoán nền:</span>&nbsp;{" "}
-              <b>{patient.diagnosis}</b>&nbsp;{" "}
-              <em className="text-[#9EC9F3]">(Do bác sĩ ghi nhận)</em>&nbsp;{" "}
-              <Pencil size={14} className="inline text-[#79B1E8]" />
+              <b>{patient.diagnosis}</b>
+              <em className="mt-1 block text-[#9EC9F3]">(Do bác sĩ ghi nhận)</em>
             </p>
           </div>
         </div>
@@ -211,7 +255,10 @@ export function PatientDetail({
                 SpO₂ hiện tại
               </span>
               <p className="mt-1 text-4xl font-extrabold text-[#EF4444]">
-                {patient.spo2}% <small className="text-sm">Thấp</small>
+                {hasClinicalData ? `${patient.spo2}%` : "—"}{" "}
+                <small className="text-sm">
+                  {hasClinicalData ? "Thấp" : "Chưa có dữ liệu"}
+                </small>
               </p>
             </div>
             <div className="flex-1 pl-8">
@@ -219,18 +266,22 @@ export function PatientDetail({
                 Âm phổi AI
               </span>
               <p className="mt-1 font-extrabold text-[#EF4444]">
-                {patient.sound}
+                {hasClinicalData ? patient.sound : "Chưa có dữ liệu"}
               </p>
-              <small className="text-[#8BBCEC]">({patient.confidence}%)</small>
+              {hasClinicalData && (
+                <small className="text-[#8BBCEC]">
+                  ({patient.confidence}%)
+                </small>
+              )}
             </div>
           </div>
-          <Link
+          {!isArchived && <Link
             href={`/patients/${patient.id}/visits/new?from=${tab}`}
             className="btn-primary whitespace-nowrap px-6 py-4 text-sm"
           >
             <Plus size={18} />
             Tạo lần khám mới
-          </Link>
+          </Link>}
         </div>
       </header>
 
@@ -263,10 +314,11 @@ export function PatientDetail({
                       key={rangeItem.id}
                       type="button"
                       onClick={() => setSpo2Range(rangeItem.id)}
-                      className={`rounded-lg px-4 py-1.5 transition ${spo2Range === rangeItem.id
+                      className={`rounded-lg px-4 py-1.5 transition ${
+                        spo2Range === rangeItem.id
                           ? "bg-white font-bold text-[#173A5E] shadow-sm"
                           : "text-[#5A7799] hover:text-[#2F78C8]"
-                        }`}
+                      }`}
                     >
                       {rangeItem.label}
                     </button>
@@ -351,7 +403,9 @@ export function PatientDetail({
           <aside className="space-y-8">
             <section className="card p-7">
               <div className="flex items-center justify-between">
-                <h2 className="font-extrabold uppercase text-[#173A5E]">Ghi chú lâm sàng</h2>
+                <h2 className="font-extrabold uppercase text-[#173A5E]">
+                  Ghi chú lâm sàng
+                </h2>
                 {notes.length > 1 && (
                   <button
                     type="button"
@@ -397,10 +451,13 @@ export function PatientDetail({
                     ) : (
                       <>
                         <div className="flex items-start justify-between gap-3">
-                          <p className="flex-1 text-[#173A5E]">{item.content}</p>
+                          <p className="flex-1 text-[#173A5E]">
+                            {item.content}
+                          </p>
                           <div className="flex shrink-0 items-center gap-1">
                             <button
                               type="button"
+                              disabled={isArchived}
                               title="Chỉnh sửa ghi chú"
                               aria-label="Chỉnh sửa ghi chú"
                               onClick={() => handleStartEditNote(item)}
@@ -410,6 +467,7 @@ export function PatientDetail({
                             </button>
                             <button
                               type="button"
+                              disabled={isArchived}
                               title="Xóa ghi chú"
                               aria-label="Xóa ghi chú"
                               onClick={() => handleDeleteNote(item.id)}
@@ -428,7 +486,7 @@ export function PatientDetail({
                 ))}
               </div>
 
-              {isAddingNote ? (
+              {!isArchived && (isAddingNote ? (
                 <div className="mt-4 space-y-3 rounded-2xl border border-[#CCE2F7] bg-[#F8FAFD] p-4">
                   <textarea
                     value={newNoteText}
@@ -466,7 +524,7 @@ export function PatientDetail({
                 >
                   + Thêm ghi chú mới
                 </button>
-              )}
+              ))}
             </section>
             <section className="card p-7">
               <h2 className="font-extrabold uppercase">Cảnh báo gần nhất</h2>
@@ -499,7 +557,9 @@ export function PatientDetail({
                 className="grid grid-cols-1 sm:grid-cols-[1fr_180px_160px] items-center gap-4 p-5 transition hover:bg-[#F4F8FD]"
               >
                 <div>
-                  <b className="text-sm font-bold text-[#173A5E]">{recording.recordedAt}</b>
+                  <b className="text-sm font-bold text-[#173A5E]">
+                    {recording.recordedAt}
+                  </b>
                   <span className="mt-0.5 block text-xs text-[#5A7799]">
                     Mã: {recording.id} · Thiết bị: {recording.deviceId}
                   </span>
@@ -517,7 +577,7 @@ export function PatientDetail({
           </div>
         </div>
       )}
-      {tab === "history" && <VisitHistory patient={patient} visits={visits} />}
+      {tab === "history" && <VisitHistory patient={patient} visits={visits} readOnly={isArchived} />}
       {tab === "notes" && (
         <section className="card mt-8 p-7 space-y-6">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -526,10 +586,11 @@ export function PatientDetail({
                 Ghi chú lâm sàng ({notes.length})
               </h2>
               <p className="mt-1 text-xs text-[#5A7799]">
-                Toàn bộ chỉ định và lưu ý theo dõi của bác sĩ cho bệnh nhân {patient.name}
+                Toàn bộ chỉ định và lưu ý theo dõi của bác sĩ cho bệnh nhân{" "}
+                {patient.name}
               </p>
             </div>
-            {!isAddingNote && (
+            {!isArchived && !isAddingNote && (
               <button
                 type="button"
                 onClick={() => setIsAddingNote(true)}
@@ -540,9 +601,11 @@ export function PatientDetail({
             )}
           </div>
 
-          {isAddingNote && (
+          {!isArchived && isAddingNote && (
             <div className="rounded-2xl border border-[#CCE2F7] bg-[#F8FAFD] p-5 space-y-3">
-              <h3 className="text-xs font-bold uppercase text-[#173A5E]">Tạo ghi chú lâm sàng</h3>
+              <h3 className="text-xs font-bold uppercase text-[#173A5E]">
+                Tạo ghi chú lâm sàng
+              </h3>
               <textarea
                 value={newNoteText}
                 onChange={(e) => setNewNoteText(e.target.value)}
@@ -612,6 +675,7 @@ export function PatientDetail({
                       <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
+                          disabled={isArchived}
                           title="Chỉnh sửa ghi chú"
                           aria-label="Chỉnh sửa ghi chú"
                           onClick={() => handleStartEditNote(item)}
@@ -621,6 +685,7 @@ export function PatientDetail({
                         </button>
                         <button
                           type="button"
+                          disabled={isArchived}
                           title="Xóa ghi chú"
                           aria-label="Xóa ghi chú"
                           onClick={() => handleDeleteNote(item.id)}
@@ -631,7 +696,9 @@ export function PatientDetail({
                       </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between text-xs text-[#8BBCEC]">
-                      <span>{item.createdAt} · {item.doctor}</span>
+                      <span>
+                        {item.createdAt} · {item.doctor}
+                      </span>
                     </div>
                   </>
                 )}

@@ -28,7 +28,7 @@ export function RecordingsList() {
   return (
     <div className="page w-full space-y-6">
       <PageHeader
-        title="Bản ghi âm"
+        title="Phân tích âm phổi"
         description="Các bản ghi hoàn chỉnh từ ống nghe số và phân loại AI RespiSense"
       />
       <div className="flex overflow-x-auto rounded-xl border border-[#E7F1FB] bg-[#F4F8FD] p-1">

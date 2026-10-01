@@ -61,7 +61,7 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
       setWidth(finalWidth);
       try {
         localStorage.setItem("respicare_sidebar_width", String(finalWidth));
-      } catch { }
+      } catch {}
     };
 
     document.body.style.cursor = "col-resize";
@@ -73,15 +73,18 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
   const [optimisticHref, setOptimisticHref] = useState<string | null>(null);
 
   const currentPath = optimisticHref || pathname;
-  const activeIndex = navigation.findIndex(
-    ({ href }) => currentPath === href || currentPath.startsWith(`${href}/`)
-  );
+  const getActiveIndex = (path: string) =>
+    navigation.findIndex(({ href }) => path === href) !== -1
+      ? navigation.findIndex(({ href }) => path === href)
+      : navigation.findIndex(({ href }) => path.startsWith(`${href}/`));
+  const activeIndex = getActiveIndex(currentPath);
 
   const itemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
-  const [indicatorRect, setIndicatorRect] = useState<{ top: number; height: number } | null>(() => {
-    const idx = navigation.findIndex(
-      ({ href }) => pathname === href || pathname.startsWith(`${href}/`)
-    );
+  const [indicatorRect, setIndicatorRect] = useState<{
+    top: number;
+    height: number;
+  } | null>(() => {
+    const idx = getActiveIndex(pathname);
     return idx !== -1 ? { top: idx * 52, height: 48 } : null;
   });
 
@@ -137,7 +140,7 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
     setWidth(nextWidth);
     try {
       localStorage.setItem("respicare_sidebar_width", String(nextWidth));
-    } catch { }
+    } catch {}
   };
 
   return (
@@ -148,14 +151,16 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
           updateIndicator(activeIndex);
         }
       }}
-      className={`relative flex h-full shrink-0 flex-col justify-between bg-[#173A5E] text-white py-6 select-none ${onClose ? "w-64 shadow-2xl" : ""
-        } ${isDragging ? "transition-none" : "transition-[width] duration-200 ease-in-out"}`}
+      className={`relative flex h-full shrink-0 flex-col justify-between bg-[#173A5E] text-white py-6 select-none ${
+        onClose ? "w-64 shadow-2xl" : ""
+      } ${isDragging ? "transition-none" : "transition-[width] duration-200 ease-in-out"}`}
     >
       <div>
         {/* Brand header */}
         <div
-          className={`mb-8 flex items-start ${isCompact ? "justify-center px-0" : "justify-between px-4"
-            }`}
+          className={`mb-8 flex items-start ${
+            isCompact ? "justify-center px-0" : "justify-between px-4"
+          }`}
         >
           <div className={isCompact ? "flex flex-col items-center" : ""}>
             <Brand compact={isCompact} inverted />
@@ -184,10 +189,11 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
                 transform: `translate3d(0, ${indicatorRect.top}px, 0)`,
                 height: `${indicatorRect.height}px`,
               }}
-              className={`pointer-events-none absolute left-0 right-0 top-0 z-10 bg-white transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${isCompact
-                ? "ml-2 -mr-[1px] rounded-l-xl"
-                : "ml-3 -mr-[1px] rounded-l-xl"
-                }`}
+              className={`pointer-events-none absolute left-0 right-0 top-0 z-10 bg-white transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
+                isCompact
+                  ? "ml-2 -mr-[1px] rounded-l-xl"
+                  : "ml-3 -mr-[1px] rounded-l-xl"
+              }`}
             >
               {/* Top concave curve with 2px overlap */}
               <svg
@@ -222,26 +228,40 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
                   setOptimisticHref(href);
                   onClose?.();
                 }}
-                title={isCompact ? `${label}${badge ? ` (${badge})` : ""}` : undefined}
-                className={`group relative z-20 flex h-12 items-center text-sm transition-colors duration-200 select-none whitespace-nowrap overflow-hidden ${isCompact
-                  ? "mx-2 justify-center rounded-xl px-0"
-                  : "mx-3 px-3 rounded-xl"
-                  } ${active
+                title={
+                  isCompact
+                    ? `${label}${badge ? ` (${badge})` : ""}`
+                    : undefined
+                }
+                className={`group relative z-20 flex h-12 items-center text-sm transition-colors duration-200 select-none whitespace-nowrap overflow-hidden ${
+                  isCompact
+                    ? "mx-2 justify-center rounded-xl px-0"
+                    : "mx-3 px-3 rounded-xl"
+                } ${
+                  active
                     ? "font-bold text-[#2F78C8]"
                     : "font-normal text-blue-100/80 hover:bg-white/10 hover:text-white"
-                  }`}
+                }`}
               >
-                <span className={`flex items-center min-w-0 ${isCompact ? "justify-center" : "gap-3"}`}>
+                <span
+                  className={`flex items-center min-w-0 ${isCompact ? "justify-center" : "gap-3"}`}
+                >
                   <Icon
                     size={18}
                     strokeWidth={active ? 2.4 : 1.75}
-                    className={`shrink-0 transition-colors duration-200 ${active ? "text-[#2F78C8]" : "text-[#9EC9F3] group-hover:text-white"
-                      }`}
+                    className={`shrink-0 transition-colors duration-200 ${
+                      active
+                        ? "text-[#2F78C8]"
+                        : "text-[#9EC9F3] group-hover:text-white"
+                    }`}
                   />
                   {!isCompact && (
                     <span
-                      className={`truncate ${active ? "font-bold text-[#2F78C8]" : "font-normal text-blue-100/80 group-hover:text-white"
-                        }`}
+                      className={`truncate ${
+                        active
+                          ? "font-bold text-[#2F78C8]"
+                          : "font-normal text-blue-100/80 group-hover:text-white"
+                      }`}
                     >
                       {label}
                     </span>
@@ -250,12 +270,13 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
 
                 {!isCompact && badge ? (
                   <span
-                    className={`ml-auto mr-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold transition-colors duration-200 ${label === "Cảnh báo"
-                      ? "bg-red-500 text-white shadow-xs"
-                      : active
-                        ? "bg-[#2F78C8] text-white"
-                        : "bg-white/20 text-white"
-                      }`}
+                    className={`ml-auto mr-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold transition-colors duration-200 ${
+                      label === "Cảnh báo"
+                        ? "bg-red-500 text-white shadow-xs"
+                        : active
+                          ? "bg-[#2F78C8] text-white"
+                          : "bg-white/20 text-white"
+                    }`}
                   >
                     {badge}
                   </span>
@@ -271,11 +292,20 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
       <div className="px-3.5 space-y-3 border-t border-white/10 pt-4">
         <LogoutButton
           title={isCompact ? "Đăng xuất" : undefined}
-          className={`group flex h-10 items-center rounded-xl text-sm font-normal text-blue-100/80 hover:bg-white/10 hover:text-white transition whitespace-nowrap overflow-hidden ${isCompact ? "justify-center px-2" : "gap-3 px-3"
-            }`}
+          className={`group flex h-10 items-center rounded-xl text-sm font-normal text-blue-100/80 hover:bg-white/10 hover:text-white transition whitespace-nowrap overflow-hidden ${
+            isCompact ? "justify-center px-2" : "gap-3 px-3"
+          }`}
         >
-          <LogOut size={16} strokeWidth={1.75} className="shrink-0 text-[#9EC9F3] group-hover:text-white transition-colors" />
-          {!isCompact && <span className="truncate font-normal text-blue-100/80 group-hover:text-white">Đăng xuất</span>}
+          <LogOut
+            size={16}
+            strokeWidth={1.75}
+            className="shrink-0 text-[#9EC9F3] group-hover:text-white transition-colors"
+          />
+          {!isCompact && (
+            <span className="truncate font-normal text-blue-100/80 group-hover:text-white">
+              Đăng xuất
+            </span>
+          )}
         </LogoutButton>
       </div>
 
@@ -295,10 +325,11 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
         >
           {/* Visual highlight line on border hover/drag */}
           <div
-            className={`h-full w-1 transition-all ${isDragging
-              ? "bg-[#2F78C8] opacity-100"
-              : "bg-[#2F78C8] opacity-0 group-hover/handle:opacity-75"
-              }`}
+            className={`h-full w-1 transition-all ${
+              isDragging
+                ? "bg-[#2F78C8] opacity-100"
+                : "bg-[#2F78C8] opacity-0 group-hover/handle:opacity-75"
+            }`}
           />
 
           {/* Floating collapse/expand pill button */}
@@ -308,10 +339,11 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
               e.stopPropagation();
               toggleCollapse();
             }}
-            className={`absolute top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full border border-[#2F78C8]/40 bg-[#173A5E] text-[#9EC9F3] shadow-md transition-all hover:border-white hover:bg-[#2F78C8] hover:text-white ${isDragging || isHoveringHandle
-              ? "scale-100 opacity-100"
-              : "scale-75 opacity-0 group-hover/handle:scale-100 group-hover/handle:opacity-100"
-              }`}
+            className={`absolute top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full border border-[#2F78C8]/40 bg-[#173A5E] text-[#9EC9F3] shadow-md transition-all hover:border-white hover:bg-[#2F78C8] hover:text-white ${
+              isDragging || isHoveringHandle
+                ? "scale-100 opacity-100"
+                : "scale-75 opacity-0 group-hover/handle:scale-100 group-hover/handle:opacity-100"
+            }`}
             title={isCompact ? "Mở rộng sidebar" : "Thu gọn sidebar"}
           >
             {isCompact ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}

@@ -55,7 +55,7 @@ export interface Patient {
   code: string;
   name: string;
   age: number;
-  gender: "Nam" | "Nữ";
+  gender: "Nam" | "Nữ" | "Khác";
   phone: string;
   diagnosis: string;
   spo2: number;

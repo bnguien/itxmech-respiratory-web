@@ -6,9 +6,11 @@ import { SPO2_WARNING_THRESHOLD } from "@/constants/spo2";
 export function VisitHistory({
   patient,
   visits,
+  readOnly = false,
 }: {
   patient: Patient;
   visits: Visit[];
+  readOnly?: boolean;
 }) {
   return (
     <section className="card mt-8 p-6 sm:p-8">
@@ -21,13 +23,13 @@ export function VisitHistory({
             Các phiên theo dõi hô hấp, SpO₂ và bản ghi âm phổi của bệnh nhân
           </p>
         </div>
-        <Link
+        {!readOnly && <Link
           href={`/patients/${patient.id}/visits/new?from=history`}
           className="btn-primary self-start px-5 py-3 text-sm"
         >
           <Plus size={17} />
           Tạo lần khám mới
-        </Link>
+        </Link>}
       </div>
       <div className="relative mt-8 space-y-6 pl-12 before:absolute before:bottom-5 before:left-4 before:top-5 before:w-px before:bg-[#DCE9F6]">
         {visits.map((visit) => {

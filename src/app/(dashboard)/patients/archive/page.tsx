@@ -1,20 +1,17 @@
 import { Suspense } from "react";
 import { PatientsList } from "@/components/patients/patients-list";
 import { TableSkeleton } from "@/components/ui/skeleton";
-export default function PatientsPage() {
+
+export default function ArchivedPatientsPage() {
   return (
     <Suspense
       fallback={
         <div className="page w-full space-y-6">
-          <div className="space-y-2">
-            <div className="h-8 w-36 animate-pulse rounded-xl bg-[#E7F1FB]/70" />
-            <div className="h-4 w-64 animate-pulse rounded-xl bg-[#E7F1FB]/70" />
-          </div>
           <TableSkeleton rows={5} cols={5} />
         </div>
       }
     >
-      <PatientsList />
+      <PatientsList archived />
     </Suspense>
   );
 }

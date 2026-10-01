@@ -13,7 +13,8 @@ import {
   User,
   X,
 } from "lucide-react";
-import { alerts, patients } from "@/constants/mock-data";
+import { alerts } from "@/constants/mock-data";
+import type { PatientListResponse, PatientRecord } from "@/types/patient";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { useDoctorProfile } from "@/components/auth/doctor-profile-context";
 import {
@@ -32,6 +33,7 @@ export function TopHeader() {
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [patientResults, setPatientResults] = useState<PatientRecord[]>([]);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -40,13 +42,22 @@ export function TopHeader() {
   // Close popovers on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(event.target as Node)
+      ) {
         setSearchOpen(false);
       }
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+      if (
+        notifRef.current &&
+        !notifRef.current.contains(event.target as Node)
+      ) {
         setNotifOpen(false);
       }
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(event.target as Node)
+      ) {
         setProfileOpen(false);
       }
     }
@@ -67,17 +78,33 @@ export function TopHeader() {
     hour < 12
       ? "Chào buổi sáng"
       : hour < 18
-      ? "Chào buổi chiều"
-      : "Chào buổi tối";
+        ? "Chào buổi chiều"
+        : "Chào buổi tối";
 
   const unreadAlerts = alerts.filter((a) => a.unread);
-  const filteredPatients = searchQuery.trim()
-    ? patients.filter(
-        (p) =>
-          (p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (p.code && p.code.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : [];
+  useEffect(() => {
+    if (!searchOpen || !searchQuery.trim()) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/patients?q=${encodeURIComponent(searchQuery.trim())}&page=1&limit=8`,
+          { signal: controller.signal, cache: "no-store" },
+        );
+        if (response.ok)
+          setPatientResults(
+            ((await response.json()) as PatientListResponse).data,
+          );
+      } catch (caught) {
+        if (!(caught instanceof DOMException && caught.name === "AbortError"))
+          setPatientResults([]);
+      }
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [searchOpen, searchQuery]);
 
   return (
     <header className="hidden lg:flex h-16 shrink-0 items-center justify-between border-b border-[#E7F1FB] bg-white px-8 select-none z-30">
@@ -152,8 +179,8 @@ export function TopHeader() {
                   <p className="py-3 text-center text-[11px] text-[#5A7799]">
                     Nhập tên bệnh nhân hoặc mã để tìm kiếm nhanh
                   </p>
-                ) : filteredPatients.length > 0 ? (
-                  filteredPatients.map((p) => (
+                ) : patientResults.length > 0 ? (
+                  patientResults.map((p) => (
                     <Link
                       key={p.id}
                       href={`/patients/${p.id}`}
@@ -162,14 +189,14 @@ export function TopHeader() {
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E7F1FB] text-xs font-bold text-[#2F78C8]">
-                          {p.name.charAt(0)}
+                          {p.full_name.charAt(0)}
                         </div>
                         <div>
                           <p className="text-xs font-bold text-[#173A5E]">
-                            {p.name}
+                            {p.full_name}
                           </p>
                           <p className="text-[10px] text-[#5A7799]">
-                            {p.code} · {p.age} tuổi
+                            {p.patient_code}
                           </p>
                         </div>
                       </div>

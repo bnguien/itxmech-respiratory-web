@@ -15,6 +15,20 @@
       "when": 1790762864020,
       "tag": "0001_doctor_profile_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790783569355,
+      "tag": "0002_boring_rictor",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790784000000,
+      "tag": "0003_archive_patients",
+      "breakpoints": true
     }
   ]
 }
