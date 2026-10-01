@@ -17,6 +17,8 @@ export interface OpenApiOperation {
   description?: string;
   operationId: string;
   security?: Array<Record<string, string[]>>;
+  parameters?: OpenApiSchema[];
+  requestBody?: OpenApiSchema;
   responses: Record<string, OpenApiResponse | { $ref: string }>;
 }
 

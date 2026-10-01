@@ -1,6 +1,53 @@
 import type { OpenApiResponse, OpenApiSchema } from "./types";
 
 export const openApiSchemas = {
+  Patient: {
+    type: "object",
+    required: ["id", "patient_code", "full_name", "date_of_birth", "gender", "created_by", "created_at", "updated_at"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      patient_code: { type: "string", example: "PAT-000001", readOnly: true },
+      full_name: { type: "string", example: "Nguyễn Văn An" },
+      date_of_birth: { type: "string", format: "date", example: "1980-05-20" },
+      gender: { type: "string", enum: ["male", "female", "other"] },
+      phone: { type: "string", nullable: true, example: "0901234567" },
+      background_diagnosis: { type: "string", nullable: true, example: "COPD" },
+      created_by: { type: "string", format: "uuid", readOnly: true },
+      created_at: { type: "string", format: "date-time", readOnly: true },
+      updated_at: { type: "string", format: "date-time", readOnly: true },
+    },
+  },
+  PatientInput: {
+    type: "object",
+    required: ["full_name", "date_of_birth", "gender"],
+    additionalProperties: false,
+    properties: {
+      full_name: { type: "string" },
+      date_of_birth: { type: "string", format: "date" },
+      gender: { type: "string", enum: ["male", "female", "other"] },
+      phone: { type: "string", nullable: true },
+      background_diagnosis: { type: "string", nullable: true },
+    },
+  },
+  PatientUpdate: {
+    type: "object",
+    additionalProperties: false,
+    minProperties: 1,
+    properties: {
+      full_name: { type: "string" },
+      date_of_birth: { type: "string", format: "date" },
+      gender: { type: "string", enum: ["male", "female", "other"] },
+      phone: { type: "string", nullable: true },
+      background_diagnosis: { type: "string", nullable: true },
+    },
+  },
+  PatientResponse: { type: "object", required: ["data"], properties: { data: { $ref: "#/components/schemas/Patient" } } },
+  PatientListResponse: {
+    type: "object", required: ["data", "pagination"], properties: {
+      data: { type: "array", items: { $ref: "#/components/schemas/Patient" } },
+      pagination: { type: "object", required: ["page", "limit", "total", "total_pages"], properties: { page: { type: "integer" }, limit: { type: "integer" }, total: { type: "integer" }, total_pages: { type: "integer" } } },
+    },
+  },
   DoctorProfile: {
     type: "object",
     required: [

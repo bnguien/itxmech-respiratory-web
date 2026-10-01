@@ -97,6 +97,23 @@ export function PatientListSkeleton({ count = 5 }: { count?: number }) {
   );
 }
 
+export function PatientDetailSkeleton() {
+  return (
+    <div className="w-full p-5 sm:p-8 lg:p-12">
+      <Skeleton className="h-4 w-40" />
+      <div className="mt-8 flex flex-col gap-8 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex items-center gap-5">
+          <Skeleton className="h-20 w-20 rounded-full" />
+          <div className="space-y-3"><Skeleton className="h-8 w-56" /><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-72" /></div>
+        </div>
+        <div className="flex gap-3"><Skeleton className="h-12 w-28" /><Skeleton className="h-12 w-36" /></div>
+      </div>
+      <Skeleton className="mt-9 h-14 w-full rounded-none" />
+      <div className="mt-8 grid gap-8 xl:grid-cols-[1.35fr_.95fr]"><Skeleton className="h-80 w-full" /><Skeleton className="h-80 w-full" /></div>
+    </div>
+  );
+}
+
 export function ChartSkeleton() {
   return (
     <div className="card p-5 sm:p-6 space-y-5">
