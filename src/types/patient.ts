@@ -1,6 +1,6 @@
 export type PatientGender = "male" | "female" | "other";
 
-export interface PatientRecord {
+export interface PatientListItem {
   id: string;
   patient_code: string;
   full_name: string;
@@ -8,11 +8,10 @@ export interface PatientRecord {
   gender: PatientGender;
   phone: string | null;
   background_diagnosis: string | null;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
+}
+
+export interface PatientDetailRecord extends PatientListItem {
   archived_at: string | null;
-  archived_by: string | null;
 }
 
 export interface PatientInput {
@@ -24,7 +23,7 @@ export interface PatientInput {
 }
 
 export interface PatientListResponse {
-  data: PatientRecord[];
+  data: PatientListItem[];
   pagination: {
     page: number;
     limit: number;

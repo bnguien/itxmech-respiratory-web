@@ -6,12 +6,12 @@ import { PatientDetail } from "@/components/patients/patient-detail";
 import { ArchivePatientModal } from "@/components/patients/archive-patient-modal";
 import { PatientDetailSkeleton } from "@/components/ui/skeleton";
 import type { Patient } from "@/types/clinical";
-import type { PatientRecord } from "@/types/patient";
+import type { PatientDetailRecord, PatientListItem } from "@/types/patient";
 import { PatientDateField, PatientGenderField, PatientNameField } from "@/components/ui/patient-form-fields";
 
 const genderLabels = { male: "Nam", female: "Nữ", other: "Khác" } as const;
 
-function toPatient(record: PatientRecord): Patient {
+function toPatient(record: PatientListItem): Patient {
   const birth = new Date(`${record.date_of_birth}T00:00:00`);
   const today = new Date();
   let age = today.getFullYear() - birth.getFullYear();
@@ -38,7 +38,7 @@ function toPatient(record: PatientRecord): Patient {
 
 export function PatientProfileView({ id }: { id: string }) {
   const router = useRouter();
-  const [record, setRecord] = useState<PatientRecord | null>(null);
+  const [record, setRecord] = useState<PatientDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +49,7 @@ export function PatientProfileView({ id }: { id: string }) {
     setLoading(true);
     const response = await fetch(`/api/patients/${id}`, { cache: "no-store" });
     const payload = (await response.json()) as {
-      data?: PatientRecord;
+      data?: PatientDetailRecord;
       error?: { message?: string };
     };
     if (response.status === 404) {
@@ -129,9 +129,9 @@ export function EditPatientModal({
   onClose,
   onSaved,
 }: {
-  patient: PatientRecord;
+  patient: PatientListItem;
   onClose: () => void;
-  onSaved: (patient: PatientRecord) => void;
+  onSaved: (patient: PatientDetailRecord) => void;
 }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -152,7 +152,7 @@ export function EditPatientModal({
       }),
     });
     const payload = (await response.json()) as {
-      data?: PatientRecord;
+      data?: PatientDetailRecord;
       error?: { message?: string; details?: Array<{ message: string }> };
     };
     setSaving(false);
