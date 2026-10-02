@@ -17,7 +17,7 @@ import { StartVisitModal } from "@/components/visits/start-visit-modal";
 import { EditPatientModal } from "@/components/patients/patient-profile-view";
 import { ArchivePatientModal } from "@/components/patients/archive-patient-modal";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { PatientListResponse, PatientRecord } from "@/types/patient";
+import type { PatientListItem, PatientListResponse } from "@/types/patient";
 
 const genderLabels = { male: "Nam", female: "Nữ", other: "Khác" } as const;
 
@@ -38,7 +38,7 @@ export function PatientsList({ archived = false }: { archived?: boolean }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [patients, setPatients] = useState<PatientRecord[]>([]);
+  const [patients, setPatients] = useState<PatientListItem[]>([]);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -48,12 +48,12 @@ export function PatientsList({ archived = false }: { archived?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
-  const [editingPatient, setEditingPatient] = useState<PatientRecord | null>(
+  const [editingPatient, setEditingPatient] = useState<PatientListItem | null>(
     null,
   );
   const [actionId, setActionId] = useState<string | null>(null);
   const [patientToArchive, setPatientToArchive] =
-    useState<PatientRecord | null>(null);
+    useState<PatientListItem | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -113,7 +113,7 @@ export function PatientsList({ archived = false }: { archived?: boolean }) {
     void loadPatients();
   }, [loadPatients]);
 
-  async function archivePatient(patient: PatientRecord) {
+  async function archivePatient(patient: PatientListItem) {
     setActionId(patient.id);
     try {
       const response = await fetch(`/api/patients/${patient.id}/archive`, {
@@ -140,7 +140,7 @@ export function PatientsList({ archived = false }: { archived?: boolean }) {
     }
   }
 
-  async function restorePatient(patient: PatientRecord) {
+  async function restorePatient(patient: PatientListItem) {
     setActionId(patient.id);
     try {
       const response = await fetch(`/api/patients/${patient.id}/restore`, {

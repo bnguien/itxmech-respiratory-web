@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { alerts } from "@/constants/mock-data";
-import type { PatientListResponse, PatientRecord } from "@/types/patient";
+import type { PatientListItem, PatientListResponse } from "@/types/patient";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { useDoctorProfile } from "@/components/auth/doctor-profile-context";
 import {
@@ -33,7 +33,7 @@ export function TopHeader() {
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [patientResults, setPatientResults] = useState<PatientRecord[]>([]);
+  const [patientResults, setPatientResults] = useState<PatientListItem[]>([]);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);

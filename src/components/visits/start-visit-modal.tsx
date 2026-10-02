@@ -5,7 +5,7 @@ import { Search, UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PatientDateField, PatientGenderField, PatientNameField } from "@/components/ui/patient-form-fields";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { PatientListResponse, PatientRecord } from "@/types/patient";
+import type { PatientDetailRecord, PatientListItem, PatientListResponse } from "@/types/patient";
 
 const genderLabels = { male: "Nam", female: "Nữ", other: "Khác" } as const;
 
@@ -20,7 +20,7 @@ export function StartVisitModal({
 }) {
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
-  const [results, setResults] = useState<PatientRecord[]>([]);
+  const [results, setResults] = useState<PatientListItem[]>([]);
   const [loadingResults, setLoadingResults] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -84,7 +84,7 @@ export function StartVisitModal({
         }),
       });
       const payload = (await response.json()) as {
-        data?: PatientRecord;
+        data?: PatientDetailRecord;
         error?: { message?: string; details?: Array<{ message: string }> };
       };
       if (!response.ok || !payload.data) {
