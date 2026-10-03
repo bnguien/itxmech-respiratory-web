@@ -99,6 +99,8 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     values.dateOfBirth = result.data.date_of_birth;
   if (result.data.gender !== undefined) values.gender = result.data.gender;
   if ("phone" in result.data) values.phone = result.data.phone ?? null;
+  if ("initial_symptoms" in result.data)
+    values.initialSymptoms = result.data.initial_symptoms ?? null;
   if ("background_diagnosis" in result.data)
     values.backgroundDiagnosis = result.data.background_diagnosis ?? null;
 

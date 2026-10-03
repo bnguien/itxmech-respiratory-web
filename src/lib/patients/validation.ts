@@ -11,6 +11,7 @@ const allowedFields = new Set([
   "date_of_birth",
   "gender",
   "phone",
+  "initial_symptoms",
   "background_diagnosis",
 ]);
 
@@ -95,7 +96,11 @@ export function validatePatientInput(
     }
   }
 
-  for (const field of ["phone", "background_diagnosis"] as const) {
+  for (const field of [
+    "phone",
+    "initial_symptoms",
+    "background_diagnosis",
+  ] as const) {
     if (field in input) {
       if (input[field] !== null && typeof input[field] !== "string") {
         issues.push({
@@ -103,7 +108,9 @@ export function validatePatientInput(
           message:
             field === "phone"
               ? "Số điện thoại không hợp lệ."
-              : "Chẩn đoán nền không hợp lệ.",
+              : field === "initial_symptoms"
+                ? "Ghi chú triệu chứng ban đầu không hợp lệ."
+                : "Chẩn đoán nền không hợp lệ.",
         });
       } else {
         data[field] = optionalText(input[field]);

@@ -57,6 +57,7 @@ export interface Patient {
   age: number;
   gender: "Nam" | "Nữ" | "Khác";
   phone: string;
+  initialSymptoms?: string;
   diagnosis: string;
   spo2: number;
   sound: LungSound;

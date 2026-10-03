@@ -23,6 +23,14 @@ export function LogoutButton({
 
     setIsLoading(true);
     onLogout?.();
+    try {
+      for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+        const key = sessionStorage.key(index);
+        if (key?.startsWith("respicare:visit-draft:")) {
+          sessionStorage.removeItem(key);
+        }
+      }
+    } catch {}
     const supabase = createClient();
     await supabase.auth.signOut();
     router.replace("/login");

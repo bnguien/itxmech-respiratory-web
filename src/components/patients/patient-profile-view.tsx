@@ -27,6 +27,7 @@ function toPatient(record: PatientListItem): Patient {
     age,
     gender: genderLabels[record.gender],
     phone: record.phone || "Chưa cập nhật",
+    initialSymptoms: record.initial_symptoms || undefined,
     diagnosis: record.background_diagnosis || "Chưa ghi nhận",
     spo2: 0,
     sound: "Normal",
@@ -100,6 +101,7 @@ export function PatientProfileView({ id }: { id: string }) {
   return (
     <>
       <PatientDetail
+        key={`${record.id}:${record.initial_symptoms || ""}`}
         patient={toPatient(record)}
         patientRecordings={[]}
         isArchived={Boolean(record.archived_at)}
@@ -148,6 +150,7 @@ export function EditPatientModal({
         date_of_birth: form.get("date_of_birth"),
         gender: form.get("gender"),
         phone: form.get("phone"),
+        initial_symptoms: form.get("initial_symptoms"),
         background_diagnosis: form.get("background_diagnosis"),
       }),
     });
@@ -190,6 +193,16 @@ export function EditPatientModal({
               name="phone"
               defaultValue={patient.phone || ""}
               className="field mt-1"
+            />
+          </label>
+          <label className="col-span-2 text-xs font-semibold text-[#5A7799]">
+            Ghi chú triệu chứng ban đầu{" "}
+            <em className="font-normal">(không bắt buộc)</em>
+            <textarea
+              name="initial_symptoms"
+              defaultValue={patient.initial_symptoms || ""}
+              className="field mt-1 min-h-20 resize-y"
+              placeholder="Triệu chứng ban đầu, lý do vào theo dõi..."
             />
           </label>
           <label className="col-span-2 text-xs font-semibold text-[#5A7799]">
