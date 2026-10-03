@@ -7,6 +7,7 @@ export interface PatientListItem {
   date_of_birth: string;
   gender: PatientGender;
   phone: string | null;
+  initial_symptoms: string | null;
   background_diagnosis: string | null;
 }
 
@@ -19,6 +20,7 @@ export interface PatientInput {
   date_of_birth: string;
   gender: PatientGender;
   phone?: string | null;
+  initial_symptoms?: string | null;
   background_diagnosis?: string | null;
 }
 

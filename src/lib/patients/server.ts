@@ -24,6 +24,7 @@ export const patientListSelection = {
   dateOfBirth: patients.dateOfBirth,
   gender: patients.gender,
   phone: patients.phone,
+  initialSymptoms: patients.initialSymptoms,
   backgroundDiagnosis: patients.backgroundDiagnosis,
 };
 
@@ -100,6 +101,7 @@ type PatientListRow = Pick<
   | "dateOfBirth"
   | "gender"
   | "phone"
+  | "initialSymptoms"
   | "backgroundDiagnosis"
 >;
 
@@ -113,6 +115,7 @@ export function serializePatientListItem(row: PatientListRow): PatientListItem {
     date_of_birth: row.dateOfBirth,
     gender: row.gender as PatientListItem["gender"],
     phone: row.phone,
+    initial_symptoms: row.initialSymptoms,
     background_diagnosis: row.backgroundDiagnosis,
   };
 }

@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
         dateOfBirth: result.data.date_of_birth!,
         gender: result.data.gender!,
         phone: result.data.phone ?? null,
+        initialSymptoms: result.data.initial_symptoms ?? null,
         backgroundDiagnosis: result.data.background_diagnosis ?? null,
         createdBy: auth.doctorId,
       })

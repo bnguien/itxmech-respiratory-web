@@ -5,7 +5,6 @@ import { AppSidebar } from "./app-sidebar";
 import { MobileHeader } from "./mobile-header";
 import { TopHeader } from "./top-header";
 import { DoctorPanel } from "./doctor-panel";
-import { MockVisitProvider } from "@/components/visits/mock-visit-context";
 import { DoctorProfileProvider } from "@/components/auth/doctor-profile-context";
 import type { AuthenticatedDoctor } from "@/types/auth";
 
@@ -20,8 +19,7 @@ export function AppShell({
   const pathname = usePathname();
   return (
     <DoctorProfileProvider doctor={doctor}>
-      <MockVisitProvider>
-        <div className="flex h-screen w-full flex-col overflow-hidden bg-white">
+      <div className="flex h-screen w-full flex-col overflow-hidden bg-white">
         <MobileHeader onMenu={() => setOpen(true)} />
         <div className="flex min-h-0 flex-1">
           <div className="hidden h-full lg:block">
@@ -49,8 +47,7 @@ export function AppShell({
             </div>
           </div>
         </div>
-        </div>
-      </MockVisitProvider>
+      </div>
     </DoctorProfileProvider>
   );
 }

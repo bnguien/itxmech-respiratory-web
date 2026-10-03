@@ -104,7 +104,7 @@ export const patientPaths = {
       tags: ["Patients"],
       summary: "Cập nhật bệnh nhân",
       description:
-        "Chỉ cho phép cập nhật họ tên, ngày sinh, giới tính, số điện thoại và chẩn đoán nền.",
+        "Chỉ cho phép cập nhật họ tên, ngày sinh, giới tính, số điện thoại, triệu chứng ban đầu và chẩn đoán nền.",
       operationId: "updatePatient",
       security,
       parameters: [patientId],

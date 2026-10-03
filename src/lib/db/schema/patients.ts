@@ -26,6 +26,7 @@ export const patients = pgTable(
     dateOfBirth: date("date_of_birth", { mode: "string" }).notNull(),
     gender: text("gender").notNull(),
     phone: text("phone"),
+    initialSymptoms: text("initial_symptoms"),
     backgroundDiagnosis: text("background_diagnosis"),
     createdBy: uuid("created_by")
       .notNull()
