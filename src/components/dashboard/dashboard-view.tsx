@@ -167,10 +167,7 @@ export function DashboardView() {
         <section className="space-y-3">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-bold">Bệnh nhân cần chú ý</h2>
-            <Link
-              href="/patients"
-              className="text-xs font-bold text-[#2F78C8]"
-            >
+            <Link href="/patients" className="text-xs font-bold text-[#2F78C8]">
               Xem tất cả
             </Link>
           </div>
@@ -210,21 +207,30 @@ export function DashboardView() {
                   </div>
 
                   <div className="text-center">
-                    <small className="block text-[11px] text-[#5A7799]">SpO₂</small>
-                    <b className={`text-sm ${p.spo2 < 90 ? "font-extrabold text-red-500" : "text-[#173A5E]"}`}>
+                    <small className="block text-[11px] text-[#5A7799]">
+                      SpO₂
+                    </small>
+                    <b
+                      className={`text-sm ${p.spo2 < 90 ? "font-extrabold text-red-500" : "text-[#173A5E]"}`}
+                    >
                       {p.spo2}%
                     </b>
                   </div>
 
                   <div className="hidden min-w-0 text-center sm:block">
-                    <small className="block text-[11px] text-[#5A7799] mb-1">Âm phổi AI</small>
+                    <small className="block text-[11px] text-[#5A7799] mb-1">
+                      Âm phổi AI
+                    </small>
                     <div className="truncate text-sm flex justify-center">
                       <SoundLabel value={p.sound} />
                     </div>
                   </div>
 
                   <div className="flex justify-end">
-                    <ChevronRight size={16} className="text-[#9EC9F3] transition-transform group-hover:translate-x-0.5" />
+                    <ChevronRight
+                      size={16}
+                      className="text-[#9EC9F3] transition-transform group-hover:translate-x-0.5"
+                    />
                   </div>
                 </Link>
               );
@@ -278,7 +284,7 @@ export function DashboardView() {
           </div>
         </section>
       </div>
-      <StartVisitModal open={open} onClose={() => setOpen(false)} />
+      <StartVisitModal open={open} onClose={() => setOpen(false)} startVisit />
     </>
   );
 }

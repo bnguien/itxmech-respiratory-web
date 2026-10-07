@@ -6,18 +6,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Archive,
   ArrowLeft,
-  Check,
   ExternalLink,
   Pencil,
   Plus,
   RotateCcw,
   Trash2,
-  X,
 } from "lucide-react";
 import type { Patient, Recording } from "@/types/clinical";
 import { Spo2Chart } from "@/components/dashboard/spo2-chart";
 import { AudioWaveform } from "@/components/recordings/audio-waveform";
-import { useMockVisits } from "@/components/visits/mock-visit-context";
 import { spo2DataByRange } from "@/constants/spo2";
 import { Spo2Monitor } from "./spo2-monitor";
 import { VisitHistory } from "./visit-history";
@@ -80,11 +77,6 @@ export function PatientDetail({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { completedVisits } = useMockVisits();
-  const visits = [
-    ...completedVisits.filter((visit) => visit.patientId === patient.id),
-    ...patient.visits,
-  ];
   const latest = patientRecordings[0];
   const requestedTab = searchParams.get("tab");
   const [tab, setTab] = useState<PatientTab>(
@@ -93,20 +85,34 @@ export function PatientDetail({
   const [spo2Range, setSpo2Range] = useState<Spo2Range>("24h");
   const currentSpo2Data = spo2DataByRange[spo2Range];
 
-  const [notes, setNotes] = useState<PatientNote[]>(() => [
-    {
-      id: "note-1",
-      content:
-        visits[0]?.note ||
-        "Theo dõi SpO₂, cân nhắc hỗ trợ oxy nếu dưới 88%. Tiếp tục theo dõi và đánh giá lại âm phổi trong lần khám tiếp theo.",
-      createdAt: "27/09/2026 · 15:35",
-      doctor: "BS. Nguyễn Bảo Nguyên",
-    },
-  ]);
+  const [notes, setNotes] = useState<PatientNote[]>(() => {
+    const initialNotes: PatientNote[] = patient.initialSymptoms
+      ? [
+          {
+            id: "initial-symptoms",
+            content: patient.initialSymptoms,
+            createdAt: "Ghi nhận ban đầu",
+            doctor: "Bác sĩ ghi nhận",
+          },
+        ]
+      : [];
+    return [
+      ...initialNotes,
+      {
+        id: "note-1",
+        content:
+          patient.visits[0]?.note ||
+          "Theo dõi SpO₂, cân nhắc hỗ trợ oxy nếu dưới 88%. Tiếp tục theo dõi và đánh giá lại âm phổi trong lần khám tiếp theo.",
+        createdAt: "27/09/2026 · 15:35",
+        doctor: "BS. Nguyễn Bảo Nguyên",
+      },
+    ];
+  });
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [newNoteText, setNewNoteText] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
+  const [noteError, setNoteError] = useState("");
 
   const handleAddNote = () => {
     if (isArchived || !newNoteText.trim()) return;
@@ -153,8 +159,26 @@ export function PatientDetail({
     setEditingNoteText("");
   };
 
-  const handleDeleteNote = (noteId: string) => {
+  const handleDeleteNote = async (noteId: string) => {
     if (isArchived) return;
+    setNoteError("");
+    if (noteId === "initial-symptoms") {
+      try {
+        const response = await fetch(`/api/patients/${patient.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initial_symptoms: null }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json()) as { error?: { message?: string } };
+          setNoteError(payload.error?.message || "Không thể xóa ghi chú triệu chứng ban đầu.");
+          return;
+        }
+      } catch {
+        setNoteError("Không thể xóa ghi chú triệu chứng ban đầu.");
+        return;
+      }
+    }
     setNotes((prev) => prev.filter((n) => n.id !== noteId));
     if (editingNoteId === noteId) {
       setEditingNoteId(null);
@@ -175,6 +199,8 @@ export function PatientDetail({
 
   useEffect(() => {
     if (isPatientTab(requestedTab)) {
+      // Sync the URL-selected tab when navigating within the patient detail.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTab(requestedTab);
     }
   }, [requestedTab]);
@@ -417,6 +443,7 @@ export function PatientDetail({
                 )}
               </div>
               <div className="mt-5 space-y-3">
+                {noteError && <p className="text-sm text-red-600">{noteError}</p>}
                 {notes.slice(0, 2).map((item) => (
                   <div
                     key={item.id}
@@ -577,7 +604,7 @@ export function PatientDetail({
           </div>
         </div>
       )}
-      {tab === "history" && <VisitHistory patient={patient} visits={visits} readOnly={isArchived} />}
+      {tab === "history" && <VisitHistory patient={patient} readOnly={isArchived} />}
       {tab === "notes" && (
         <section className="card mt-8 p-7 space-y-6">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -600,6 +627,8 @@ export function PatientDetail({
               </button>
             )}
           </div>
+
+          {noteError && <p className="text-sm text-red-600">{noteError}</p>}
 
           {!isArchived && isAddingNote && (
             <div className="rounded-2xl border border-[#CCE2F7] bg-[#F8FAFD] p-5 space-y-3">

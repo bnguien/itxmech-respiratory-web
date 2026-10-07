@@ -5,13 +5,28 @@ import { patients } from "@/lib/db/schema/patients";
 import {
   apiError,
   authorizeDoctor,
-  serializePatient,
+  logPatientApiTiming,
+  patientListSelection,
+  serializePatientListItem,
   validationError,
+  withPatientApiTiming,
 } from "@/lib/patients/server";
 
 export async function GET(request: NextRequest) {
+  const requestStartedAt = performance.now();
   const auth = await authorizeDoctor();
-  if (auth.response) return auth.response;
+  const finish = (response: NextResponse, databaseMs = 0) => {
+    const totalMs = performance.now() - requestStartedAt;
+    logPatientApiTiming({
+      route: "GET /api/patients/archive",
+      status: response.status,
+      authorization: auth.timing,
+      databaseMs,
+      totalMs,
+    });
+    return withPatientApiTiming(response, auth.timing, databaseMs, totalMs);
+  };
+  if (auth.response) return finish(auth.response);
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const page = Number(request.nextUrl.searchParams.get("page") ?? "1");
   const limit = Number(request.nextUrl.searchParams.get("limit") ?? "20");
@@ -22,12 +37,12 @@ export async function GET(request: NextRequest) {
     limit < 1 ||
     limit > 100
   )
-    return validationError([
+    return finish(validationError([
       {
         field: "pagination",
         message: "Trang phải từ 1 và giới hạn phải từ 1 đến 100.",
       },
-    ]);
+    ]));
   const search = q
     ? or(
         ilike(patients.fullName, `%${q}%`),
@@ -36,10 +51,11 @@ export async function GET(request: NextRequest) {
       )
     : undefined;
   const where = and(isNotNull(patients.archivedAt), search);
+  const databaseStartedAt = performance.now();
   try {
     const [rows, totalRows] = await Promise.all([
       db
-        .select()
+        .select(patientListSelection)
         .from(patients)
         .where(where)
         .orderBy(desc(patients.archivedAt), desc(patients.patientCode))
@@ -47,17 +63,28 @@ export async function GET(request: NextRequest) {
         .offset((page - 1) * limit),
       db.select({ value: count() }).from(patients).where(where),
     ]);
+    const databaseMs = performance.now() - databaseStartedAt;
     const total = totalRows[0]?.value ?? 0;
-    return NextResponse.json({
-      data: rows.map(serializePatient),
+    return finish(NextResponse.json({
+      data: rows.map(serializePatientListItem),
       pagination: { page, limit, total, total_pages: Math.ceil(total / limit) },
-    });
+    }), databaseMs);
   } catch (error) {
-    console.error("Unable to list archived patients", error);
-    return apiError(
-      500,
-      "INTERNAL_ERROR",
-      "Không thể tải danh sách bệnh nhân đã lưu trữ.",
+    const databaseMs = performance.now() - databaseStartedAt;
+    const databaseCode =
+      typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : "UNKNOWN";
+    console.error("[Patient API] Failed to list archived patients", {
+      code: databaseCode,
+    });
+    return finish(
+      apiError(
+        500,
+        "INTERNAL_ERROR",
+        "Không thể tải danh sách bệnh nhân đã lưu trữ.",
+      ),
+      databaseMs,
     );
   }
 }

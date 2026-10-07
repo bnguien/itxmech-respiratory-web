@@ -3,7 +3,7 @@ import type { OpenApiResponse, OpenApiSchema } from "./types";
 export const openApiSchemas = {
   Patient: {
     type: "object",
-    required: ["id", "patient_code", "full_name", "date_of_birth", "gender", "created_by", "created_at", "updated_at"],
+    required: ["id", "patient_code", "full_name", "date_of_birth", "gender", "initial_symptoms", "archived_at"],
     properties: {
       id: { type: "string", format: "uuid" },
       patient_code: { type: "string", example: "PAT-000001", readOnly: true },
@@ -11,10 +11,23 @@ export const openApiSchemas = {
       date_of_birth: { type: "string", format: "date", example: "1980-05-20" },
       gender: { type: "string", enum: ["male", "female", "other"] },
       phone: { type: "string", nullable: true, example: "0901234567" },
+      initial_symptoms: { type: "string", nullable: true, example: "Ho kéo dài, khó thở khi gắng sức" },
       background_diagnosis: { type: "string", nullable: true, example: "COPD" },
-      created_by: { type: "string", format: "uuid", readOnly: true },
-      created_at: { type: "string", format: "date-time", readOnly: true },
-      updated_at: { type: "string", format: "date-time", readOnly: true },
+      archived_at: { type: "string", format: "date-time", nullable: true, readOnly: true },
+    },
+  },
+  PatientListItem: {
+    type: "object",
+    required: ["id", "patient_code", "full_name", "date_of_birth", "gender", "initial_symptoms"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      patient_code: { type: "string", example: "PAT-000001", readOnly: true },
+      full_name: { type: "string", example: "Nguyễn Văn An" },
+      date_of_birth: { type: "string", format: "date", example: "1980-05-20" },
+      gender: { type: "string", enum: ["male", "female", "other"] },
+      phone: { type: "string", nullable: true, example: "0901234567" },
+      initial_symptoms: { type: "string", nullable: true, example: "Ho kéo dài, khó thở khi gắng sức" },
+      background_diagnosis: { type: "string", nullable: true, example: "COPD" },
     },
   },
   PatientInput: {
@@ -26,6 +39,7 @@ export const openApiSchemas = {
       date_of_birth: { type: "string", format: "date" },
       gender: { type: "string", enum: ["male", "female", "other"] },
       phone: { type: "string", nullable: true },
+      initial_symptoms: { type: "string", nullable: true },
       background_diagnosis: { type: "string", nullable: true },
     },
   },
@@ -38,13 +52,74 @@ export const openApiSchemas = {
       date_of_birth: { type: "string", format: "date" },
       gender: { type: "string", enum: ["male", "female", "other"] },
       phone: { type: "string", nullable: true },
+      initial_symptoms: { type: "string", nullable: true },
       background_diagnosis: { type: "string", nullable: true },
     },
   },
   PatientResponse: { type: "object", required: ["data"], properties: { data: { $ref: "#/components/schemas/Patient" } } },
   PatientListResponse: {
     type: "object", required: ["data", "pagination"], properties: {
-      data: { type: "array", items: { $ref: "#/components/schemas/Patient" } },
+      data: { type: "array", items: { $ref: "#/components/schemas/PatientListItem" } },
+      pagination: { type: "object", required: ["page", "limit", "total", "total_pages"], properties: { page: { type: "integer" }, limit: { type: "integer" }, total: { type: "integer" }, total_pages: { type: "integer" } } },
+    },
+  },
+  Visit: {
+    type: "object",
+    required: ["id", "patient_name", "patient_code", "patient_date_of_birth", "patient_gender", "patient_background_diagnosis", "doctor_name", "clinical_note", "status", "version", "started_at", "completed_at", "updated_at", "can_edit"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      patient_name: { type: "string" },
+      patient_code: { type: "string" },
+      patient_date_of_birth: { type: "string", format: "date" },
+      patient_gender: { type: "string", enum: ["male", "female", "other"] },
+      patient_background_diagnosis: { type: "string", nullable: true },
+      doctor_name: { type: "string" },
+      clinical_note: { type: "string", nullable: true },
+      status: { type: "string", enum: ["in_progress", "completed", "cancelled"] },
+      version: { type: "integer", minimum: 1 },
+      started_at: { type: "string", format: "date-time" },
+      completed_at: { type: "string", format: "date-time", nullable: true },
+      updated_at: { type: "string", format: "date-time" },
+      can_edit: { type: "boolean", readOnly: true },
+    },
+  },
+  VisitSummary: {
+    type: "object",
+    required: ["id", "doctor_name", "clinical_note", "status", "version", "started_at", "completed_at", "updated_at", "can_edit", "can_delete"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      doctor_name: { type: "string" },
+      clinical_note: { type: "string", nullable: true },
+      status: { type: "string", enum: ["in_progress", "completed", "cancelled"] },
+      version: { type: "integer", minimum: 1 },
+      started_at: { type: "string", format: "date-time" },
+      completed_at: { type: "string", format: "date-time", nullable: true },
+      updated_at: { type: "string", format: "date-time" },
+      can_edit: { type: "boolean", readOnly: true },
+      can_delete: { type: "boolean", readOnly: true },
+    },
+  },
+  VisitUpdate: {
+    type: "object",
+    additionalProperties: false,
+    required: ["clinical_note", "version"],
+    properties: {
+      clinical_note: { type: "string" },
+      version: { type: "integer", minimum: 1, description: "Version hiện tại dùng cho optimistic locking." },
+    },
+  },
+  VisitVersion: {
+    type: "object",
+    additionalProperties: false,
+    required: ["version"],
+    properties: { version: { type: "integer", minimum: 1 } },
+  },
+  VisitResponse: { type: "object", required: ["data"], properties: { data: { $ref: "#/components/schemas/Visit" } } },
+  PaginatedVisitsResponse: {
+    type: "object",
+    required: ["data", "pagination"],
+    properties: {
+      data: { type: "array", items: { $ref: "#/components/schemas/VisitSummary" } },
       pagination: { type: "object", required: ["page", "limit", "total", "total_pages"], properties: { page: { type: "integer" }, limit: { type: "integer" }, total: { type: "integer" }, total_pages: { type: "integer" } } },
     },
   },
@@ -214,6 +289,15 @@ export const openApiSchemas = {
       },
     },
   },
+  ConflictError: {
+    allOf: [{ $ref: "#/components/schemas/ErrorResponse" }],
+    example: {
+      error: {
+        code: "VISIT_VERSION_CONFLICT",
+        message: "Lần khám đã được thay đổi ở tab hoặc phiên khác.",
+      },
+    },
+  },
   SuccessResponse: {
     type: "object",
     required: ["success"],
@@ -269,6 +353,10 @@ export const commonOpenApiResponses = {
   NotFound: {
     ...jsonResponse("NotFoundError"),
     description: "Không tìm thấy tài nguyên.",
+  },
+  Conflict: {
+    ...jsonResponse("ConflictError"),
+    description: "Trạng thái visit không hợp lệ hoặc version đã thay đổi.",
   },
   InternalError: {
     ...jsonResponse("ErrorResponse"),

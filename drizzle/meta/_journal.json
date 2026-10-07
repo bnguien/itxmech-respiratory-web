@@ -29,6 +29,27 @@
       "when": 1790784000000,
       "tag": "0003_archive_patients",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790820000000,
+      "tag": "0004_provision_doctor_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790906400000,
+      "tag": "0005_create_visits",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790910000000,
+      "tag": "0006_add_patient_initial_symptoms",
+      "breakpoints": true
     }
   ]
 }

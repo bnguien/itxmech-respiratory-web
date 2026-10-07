@@ -17,6 +17,10 @@ const publicApiRoutes = new Set([
   "/api/health",
 ]);
 
+// Patient handlers perform their own authenticated doctor check. Letting them
+// pass through avoids verifying the same Supabase token twice per request.
+const selfAuthenticatedApiPrefixes = ["/api/patients"];
+
 function isProtectedPage(pathname: string) {
   return protectedPagePrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -38,6 +42,16 @@ function redirectWithSession(url: URL, sessionResponse: NextResponse) {
 
 export async function updateSession(request: NextRequest) {
   if (publicApiRoutes.has(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
+
+  if (
+    selfAuthenticatedApiPrefixes.some(
+      (prefix) =>
+        request.nextUrl.pathname === prefix ||
+        request.nextUrl.pathname.startsWith(`${prefix}/`),
+    )
+  ) {
     return NextResponse.next({ request });
   }
 

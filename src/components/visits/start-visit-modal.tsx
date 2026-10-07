@@ -5,7 +5,7 @@ import { Search, UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PatientDateField, PatientGenderField, PatientNameField } from "@/components/ui/patient-form-fields";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { PatientListResponse, PatientRecord } from "@/types/patient";
+import type { PatientDetailRecord, PatientListItem, PatientListResponse } from "@/types/patient";
 
 const genderLabels = { male: "Nam", female: "Nữ", other: "Khác" } as const;
 
@@ -13,14 +13,16 @@ export function StartVisitModal({
   open,
   onClose,
   onPatientCreated,
+  startVisit = false,
 }: {
   open: boolean;
   onClose: () => void;
   onPatientCreated?: () => void | Promise<void>;
+  startVisit?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
-  const [results, setResults] = useState<PatientRecord[]>([]);
+  const [results, setResults] = useState<PatientListItem[]>([]);
   const [loadingResults, setLoadingResults] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -80,11 +82,12 @@ export function StartVisitModal({
           date_of_birth: form.get("date_of_birth"),
           gender: form.get("gender"),
           phone: form.get("phone"),
+          initial_symptoms: form.get("initial_symptoms"),
           background_diagnosis: form.get("background_diagnosis"),
         }),
       });
       const payload = (await response.json()) as {
-        data?: PatientRecord;
+        data?: PatientDetailRecord;
         error?: { message?: string; details?: Array<{ message: string }> };
       };
       if (!response.ok || !payload.data) {
@@ -97,7 +100,11 @@ export function StartVisitModal({
       }
       await onPatientCreated?.();
       onClose();
-      router.push(`/patients/${payload.data.id}`);
+      router.push(
+        startVisit
+          ? `/patients/${payload.data.id}/visits/new`
+          : `/patients/${payload.data.id}`,
+      );
       router.refresh();
     } catch {
       setError("Không thể tạo hồ sơ bệnh nhân.");
@@ -117,7 +124,9 @@ export function StartVisitModal({
       >
         <div className="flex items-start justify-between border-b border-[#E7F1FB] p-5">
           <div>
-            <h2 className="font-bold text-[#173A5E]">Thêm bệnh nhân</h2>
+            <h2 className="font-bold text-[#173A5E]">
+              {startVisit ? "Bắt đầu khám" : "Thêm bệnh nhân"}
+            </h2>
             <p className="mt-1 text-xs text-[#5A7799]">
               Chọn bệnh nhân cũ hoặc thêm hồ sơ bệnh nhân mới
             </p>
@@ -171,7 +180,13 @@ export function StartVisitModal({
               {!loadingResults && results.map((patient) => (
                 <button
                   key={patient.id}
-                  onClick={() => router.push(`/patients/${patient.id}`)}
+                  onClick={() =>
+                    router.push(
+                      startVisit
+                        ? `/patients/${patient.id}/visits/new`
+                        : `/patients/${patient.id}`,
+                    )
+                  }
                   className="flex w-full items-center justify-between px-2 py-3 text-left hover:bg-[#F4F8FD]"
                 >
                   <span>
@@ -208,6 +223,15 @@ export function StartVisitModal({
                   name="phone"
                   className="field mt-1"
                   placeholder="090..."
+                />
+              </label>
+              <label className="col-span-2 text-xs font-semibold text-[#5A7799]">
+                Ghi chú triệu chứng ban đầu{" "}
+                <em className="font-normal">(không bắt buộc)</em>
+                <textarea
+                  name="initial_symptoms"
+                  className="field mt-1 min-h-20 resize-y"
+                  placeholder="Triệu chứng ban đầu, lý do vào theo dõi..."
                 />
               </label>
               <label className="col-span-2 text-xs font-semibold text-[#5A7799]">

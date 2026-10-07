@@ -5,8 +5,11 @@ import { patients } from "@/lib/db/schema/patients";
 import {
   apiError,
   authorizeDoctor,
-  serializePatient,
+  logPatientApiTiming,
+  patientDetailSelection,
+  serializePatientDetail,
   validationError,
+  withPatientApiTiming,
 } from "@/lib/patients/server";
 import { validatePatientInput } from "@/lib/patients/validation";
 
@@ -17,7 +20,7 @@ const uuidPattern =
 async function patientById(id: string) {
   if (!uuidPattern.test(id)) return undefined;
   const [patient] = await db
-    .select()
+    .select(patientDetailSelection)
     .from(patients)
     .where(eq(patients.id, id))
     .limit(1);
@@ -25,17 +28,47 @@ async function patientById(id: string) {
 }
 
 export async function GET(_request: NextRequest, { params }: Context) {
+  const requestStartedAt = performance.now();
   const auth = await authorizeDoctor();
-  if (auth.response) return auth.response;
+  const finish = (response: NextResponse, databaseMs = 0) => {
+    const totalMs = performance.now() - requestStartedAt;
+    logPatientApiTiming({
+      route: "GET /api/patients/[id]",
+      status: response.status,
+      authorization: auth.timing,
+      databaseMs,
+      totalMs,
+    });
+    return withPatientApiTiming(response, auth.timing, databaseMs, totalMs);
+  };
+  if (auth.response) return finish(auth.response);
   const { id } = await params;
+  const databaseStartedAt = performance.now();
   try {
     const patient = await patientById(id);
+    const databaseMs = performance.now() - databaseStartedAt;
     if (!patient)
-      return apiError(404, "NOT_FOUND", "Không tìm thấy bệnh nhân.");
-    return NextResponse.json({ data: serializePatient(patient) });
+      return finish(
+        apiError(404, "NOT_FOUND", "Không tìm thấy bệnh nhân."),
+        databaseMs,
+      );
+    return finish(
+      NextResponse.json({ data: serializePatientDetail(patient) }),
+      databaseMs,
+    );
   } catch (error) {
-    console.error("Unable to get patient", error);
-    return apiError(500, "INTERNAL_ERROR", "Không thể tải hồ sơ bệnh nhân.");
+    const databaseMs = performance.now() - databaseStartedAt;
+    const databaseCode =
+      typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : "UNKNOWN";
+    console.error("[Patient API] Failed to get patient detail", {
+      code: databaseCode,
+    });
+    return finish(
+      apiError(500, "INTERNAL_ERROR", "Không thể tải hồ sơ bệnh nhân."),
+      databaseMs,
+    );
   }
 }
 
@@ -66,6 +99,8 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     values.dateOfBirth = result.data.date_of_birth;
   if (result.data.gender !== undefined) values.gender = result.data.gender;
   if ("phone" in result.data) values.phone = result.data.phone ?? null;
+  if ("initial_symptoms" in result.data)
+    values.initialSymptoms = result.data.initial_symptoms ?? null;
   if ("background_diagnosis" in result.data)
     values.backgroundDiagnosis = result.data.background_diagnosis ?? null;
 
@@ -74,10 +109,10 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       .update(patients)
       .set(values)
       .where(and(eq(patients.id, id), isNull(patients.archivedAt)))
-      .returning();
+      .returning(patientDetailSelection);
     if (!updated)
       return apiError(404, "NOT_FOUND", "Không tìm thấy bệnh nhân.");
-    return NextResponse.json({ data: serializePatient(updated) });
+    return NextResponse.json({ data: serializePatientDetail(updated) });
   } catch (error) {
     console.error("Unable to update patient", error);
     return apiError(

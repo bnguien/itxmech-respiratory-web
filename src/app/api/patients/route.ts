@@ -5,51 +5,31 @@ import { patients } from "@/lib/db/schema/patients";
 import {
   apiError,
   authorizeDoctor,
-  serializePatient,
+  logPatientApiTiming,
+  patientDetailSelection,
+  patientListSelection,
+  serializePatientDetail,
+  serializePatientListItem,
   validationError,
+  withPatientApiTiming,
 } from "@/lib/patients/server";
 import { validatePatientInput } from "@/lib/patients/validation";
 
-function patientListDatabaseError(error: unknown) {
-  const databaseError = error as {
-    message?: unknown;
-    code?: unknown;
-    detail?: unknown;
-    hint?: unknown;
-  };
-  const debug = {
-    message:
-      typeof databaseError.message === "string"
-        ? databaseError.message
-        : String(error),
-    code:
-      typeof databaseError.code === "string" ? databaseError.code : undefined,
-    detail:
-      typeof databaseError.detail === "string"
-        ? databaseError.detail
-        : undefined,
-    hint:
-      typeof databaseError.hint === "string" ? databaseError.hint : undefined,
-  };
-  console.error(
-    "[Patients API] Database error while listing active patients",
-    debug,
-  );
-  return NextResponse.json(
-    {
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "Không thể tải danh sách bệnh nhân.",
-        ...(process.env.NODE_ENV !== "production" ? { debug } : {}),
-      },
-    },
-    { status: 500 },
-  );
-}
-
 export async function GET(request: NextRequest) {
+  const requestStartedAt = performance.now();
   const auth = await authorizeDoctor();
-  if (auth.response) return auth.response;
+  const finish = (response: NextResponse, databaseMs = 0) => {
+    const totalMs = performance.now() - requestStartedAt;
+    logPatientApiTiming({
+      route: "GET /api/patients",
+      status: response.status,
+      authorization: auth.timing,
+      databaseMs,
+      totalMs,
+    });
+    return withPatientApiTiming(response, auth.timing, databaseMs, totalMs);
+  };
+  if (auth.response) return finish(auth.response);
 
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const rawPage = Number(request.nextUrl.searchParams.get("page") ?? "1");
@@ -61,12 +41,12 @@ export async function GET(request: NextRequest) {
     rawLimit < 1 ||
     rawLimit > 100
   ) {
-    return validationError([
+    return finish(validationError([
       {
         field: "pagination",
         message: "Trang phải từ 1 và giới hạn phải từ 1 đến 100.",
       },
-    ]);
+    ]));
   }
 
   const search = q
@@ -78,10 +58,11 @@ export async function GET(request: NextRequest) {
     : undefined;
   const where = and(isNull(patients.archivedAt), search);
 
+  const databaseStartedAt = performance.now();
   try {
     const [rows, totalRows] = await Promise.all([
       db
-        .select()
+        .select(patientListSelection)
         .from(patients)
         .where(where)
         .orderBy(desc(patients.createdAt), desc(patients.patientCode))
@@ -89,18 +70,30 @@ export async function GET(request: NextRequest) {
         .offset((rawPage - 1) * rawLimit),
       db.select({ value: count() }).from(patients).where(where),
     ]);
+    const databaseMs = performance.now() - databaseStartedAt;
     const total = totalRows[0]?.value ?? 0;
-    return NextResponse.json({
-      data: rows.map(serializePatient),
+    return finish(NextResponse.json({
+      data: rows.map(serializePatientListItem),
       pagination: {
         page: rawPage,
         limit: rawLimit,
         total,
         total_pages: Math.ceil(total / rawLimit),
       },
-    });
+    }), databaseMs);
   } catch (error) {
-    return patientListDatabaseError(error);
+    const databaseMs = performance.now() - databaseStartedAt;
+    const databaseCode =
+      typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : "UNKNOWN";
+    console.error("[Patient API] Failed to list active patients", {
+      code: databaseCode,
+    });
+    return finish(
+      apiError(500, "INTERNAL_ERROR", "Không thể tải danh sách bệnh nhân."),
+      databaseMs,
+    );
   }
 }
 
@@ -127,12 +120,13 @@ export async function POST(request: NextRequest) {
         dateOfBirth: result.data.date_of_birth!,
         gender: result.data.gender!,
         phone: result.data.phone ?? null,
+        initialSymptoms: result.data.initial_symptoms ?? null,
         backgroundDiagnosis: result.data.background_diagnosis ?? null,
         createdBy: auth.doctorId,
       })
-      .returning();
+      .returning(patientDetailSelection);
     return NextResponse.json(
-      { data: serializePatient(created) },
+      { data: serializePatientDetail(created) },
       { status: 201 },
     );
   } catch (error) {

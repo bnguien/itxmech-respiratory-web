@@ -16,10 +16,12 @@ const globalForDatabase = globalThis as unknown as {
 const sql =
   globalForDatabase.patientSql ??
   postgres(databaseUrl, {
-    max: process.env.NODE_ENV === "production" ? 10 : 1,
+    max: 10,
     prepare: false,
+    idle_timeout: 20,
+    connect_timeout: 10,
   });
 
-if (process.env.NODE_ENV !== "production") globalForDatabase.patientSql = sql;
+globalForDatabase.patientSql ??= sql;
 
 export const db = drizzle(sql);
