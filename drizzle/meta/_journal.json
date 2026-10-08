@@ -50,6 +50,20 @@
       "when": 1790910000000,
       "tag": "0006_add_patient_initial_symptoms",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790996400000,
+      "tag": "0007_create_recordings",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791454198722,
+      "tag": "0008_lung_sound_ai_integration",
+      "breakpoints": true
     }
   ]
 }

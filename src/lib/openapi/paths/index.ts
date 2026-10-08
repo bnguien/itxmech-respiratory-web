@@ -2,6 +2,8 @@ import { authPaths } from "./auth";
 import { systemPaths } from "./system";
 import { patientPaths } from "./patients";
 import { visitPaths } from "./visits";
+import { recordingPaths } from "./recordings";
+import { analysisPaths } from "./analysis";
 import type { OpenApiPathItem } from "../types";
 
 // Add each domain path map here as the backend grows. Keeping this merge in one
@@ -11,4 +13,6 @@ export const openApiPaths: Record<string, OpenApiPathItem> = {
   ...systemPaths,
   ...patientPaths,
   ...visitPaths,
+  ...recordingPaths,
+  ...analysisPaths,
 };
