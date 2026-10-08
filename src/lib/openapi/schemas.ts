@@ -123,6 +123,49 @@ export const openApiSchemas = {
       pagination: { type: "object", required: ["page", "limit", "total", "total_pages"], properties: { page: { type: "integer" }, limit: { type: "integer" }, total: { type: "integer" }, total_pages: { type: "integer" } } },
     },
   },
+  Recording: {
+    type: "object",
+    required: ["id", "visit_id", "upload_status", "file_size_bytes", "duration_ms", "sample_rate_hz", "bit_depth", "channel_count", "uploaded_at"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      visit_id: { type: "string", format: "uuid" },
+      upload_status: { type: "string", enum: ["waiting_upload", "uploaded", "failed"] },
+      file_size_bytes: { type: "integer", nullable: true },
+      duration_ms: { type: "integer", nullable: true },
+      sample_rate_hz: { type: "integer", nullable: true },
+      bit_depth: { type: "integer", nullable: true },
+      channel_count: { type: "integer", nullable: true },
+      uploaded_at: { type: "string", format: "date-time", nullable: true },
+    },
+  },
+  RecordingResponse: { type: "object", required: ["data"], properties: { data: { $ref: "#/components/schemas/Recording" } } },
+  RecordingSummary: {
+    allOf: [
+      { $ref: "#/components/schemas/Recording" },
+      { type: "object", required: ["patient_id", "patient_name", "patient_code", "visit_started_at"], properties: {
+        patient_id: { type: "string", format: "uuid" }, patient_name: { type: "string" }, patient_code: { type: "string" }, visit_started_at: { type: "string", format: "date-time" },
+      } },
+    ],
+  },
+  PaginatedRecordingsResponse: {
+    type: "object", required: ["data", "pagination"], properties: {
+      data: { type: "array", items: { $ref: "#/components/schemas/RecordingSummary" } },
+      pagination: { type: "object", required: ["page", "limit", "total", "total_pages"], properties: { page: { type: "integer" }, limit: { type: "integer" }, total: { type: "integer" }, total_pages: { type: "integer" } } },
+    },
+  },
+  DeviceUploadUrlResponse: {
+    type: "object", required: ["data"], properties: { data: { type: "object", required: ["recording_id", "visit_id", "upload_url", "expires_in"], properties: {
+      recording_id: { type: "string", format: "uuid" }, visit_id: { type: "string", format: "uuid" }, upload_url: { type: "string", format: "uri" }, expires_in: { type: "integer", example: 600 },
+    } } },
+  },
+  CompleteRecordingRequest: {
+    type: "object", additionalProperties: false, properties: {
+      file_size_bytes: { type: "integer", minimum: 0 }, duration_ms: { type: "integer", minimum: 0 }, sample_rate_hz: { type: "integer", minimum: 0 }, bit_depth: { type: "integer", minimum: 0 }, channel_count: { type: "integer", minimum: 0 },
+    },
+  },
+  PlaybackUrlResponse: {
+    type: "object", required: ["data"], properties: { data: { type: "object", required: ["url", "expires_in"], properties: { url: { type: "string", format: "uri" }, expires_in: { type: "integer", example: 600 } } } },
+  },
   DoctorProfile: {
     type: "object",
     required: [

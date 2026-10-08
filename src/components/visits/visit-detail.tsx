@@ -12,9 +12,8 @@ import {
   LoaderCircle,
   Radio,
   Save,
-  Stethoscope,
-  Wifi,
 } from "lucide-react";
+import { VisitRecordingPanel } from "@/components/recordings/visit-recording-panel";
 import type { ApiError, Visit, VisitStatus } from "@/types/visit";
 
 const statusLabels: Record<VisitStatus, string> = {
@@ -76,7 +75,9 @@ export function VisitDetail({
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState("");
   const [loadError, setLoadError] = useState("");
-  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(
+    null,
+  );
   const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
   const transitionInFlightRef = useRef(false);
@@ -94,7 +95,10 @@ export function VisitDetail({
         const payload = (await response.json()) as { data: Visit } | ApiError;
         if (!response.ok || !("data" in payload)) {
           setLoadError(
-            errorMessage(payload as ApiError, "Không thể tải thông tin lần khám."),
+            errorMessage(
+              payload as ApiError,
+              "Không thể tải thông tin lần khám.",
+            ),
           );
           return;
         }
@@ -138,7 +142,11 @@ export function VisitDetail({
     if (!isDirty) return;
     sessionStorage.setItem(
       draftKey,
-      JSON.stringify({ clinical_note: note, version, draft_updated_at: Date.now() }),
+      JSON.stringify({
+        clinical_note: note,
+        version,
+        draft_updated_at: Date.now(),
+      }),
     );
   }, [draftKey, isDirty, note, version]);
 
@@ -155,9 +163,14 @@ export function VisitDetail({
   useEffect(() => {
     if (!isDirty) return;
     const interceptLink = (event: MouseEvent) => {
-      if (allowNavigationRef.current || event.defaultPrevented || event.button !== 0)
+      if (
+        allowNavigationRef.current ||
+        event.defaultPrevented ||
+        event.button !== 0
+      )
         return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
       const target = event.target as Element | null;
       const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
       if (
@@ -195,14 +208,19 @@ export function VisitDetail({
       setIsSaving(true);
       setSaveError("");
       try {
-        const response = await fetch(`/api/patients/${patientId}/visits/${visitId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clinical_note: note, version }),
-        });
+        const response = await fetch(
+          `/api/patients/${patientId}/visits/${visitId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clinical_note: note, version }),
+          },
+        );
         const payload = (await response.json()) as { data: Visit } | ApiError;
         if (!response.ok || !("data" in payload)) {
-          setSaveError(errorMessage(payload as ApiError, "Không thể lưu lần khám."));
+          setSaveError(
+            errorMessage(payload as ApiError, "Không thể lưu lần khám."),
+          );
           return false;
         }
         setVisit(payload.data);
@@ -233,7 +251,8 @@ export function VisitDetail({
   }
 
   async function completeVisit() {
-    if (transitionInFlightRef.current || savePromiseRef.current || isSaving) return;
+    if (transitionInFlightRef.current || savePromiseRef.current || isSaving)
+      return;
     transitionInFlightRef.current = true;
     setIsCompleting(true);
     setSaveError("");
@@ -241,7 +260,9 @@ export function VisitDetail({
       let activeVersion = version;
       if (isDirty) {
         if (!(await save())) {
-          setSaveError("Không thể hoàn tất vì dữ liệu chưa được lưu. Vui lòng thử lại.");
+          setSaveError(
+            "Không thể hoàn tất vì dữ liệu chưa được lưu. Vui lòng thử lại.",
+          );
           return;
         }
         activeVersion += 1;
@@ -255,20 +276,32 @@ export function VisitDetail({
         },
       );
       const payload = (await response.json()) as
-        | { data: { status: "completed"; version: number; completed_at: string } }
+        | {
+            data: {
+              status: "completed";
+              version: number;
+              completed_at: string;
+            };
+          }
         | ApiError;
       if (!response.ok || !("data" in payload)) {
-        setSaveError(errorMessage(payload as ApiError, "Không thể hoàn tất lần khám."));
+        setSaveError(
+          errorMessage(payload as ApiError, "Không thể hoàn tất lần khám."),
+        );
         return;
       }
       setVersion(payload.data.version);
-      setVisit((current) => current ? {
-        ...current,
-        status: "completed",
-        completed_at: payload.data.completed_at,
-        version: payload.data.version,
-        can_edit: false,
-      } : current);
+      setVisit((current) =>
+        current
+          ? {
+              ...current,
+              status: "completed",
+              completed_at: payload.data.completed_at,
+              version: payload.data.version,
+              can_edit: false,
+            }
+          : current,
+      );
       setIsDirty(false);
       sessionStorage.removeItem(draftKey);
     } catch {
@@ -280,7 +313,8 @@ export function VisitDetail({
   }
 
   async function cancelVisit() {
-    if (transitionInFlightRef.current || savePromiseRef.current || isSaving) return;
+    if (transitionInFlightRef.current || savePromiseRef.current || isSaving)
+      return;
     transitionInFlightRef.current = true;
     setIsCancelling(true);
     setSaveError("");
@@ -297,16 +331,22 @@ export function VisitDetail({
         | { data: { status: "cancelled"; version: number } }
         | ApiError;
       if (!response.ok || !("data" in payload)) {
-        setSaveError(errorMessage(payload as ApiError, "Không thể hủy lần khám."));
+        setSaveError(
+          errorMessage(payload as ApiError, "Không thể hủy lần khám."),
+        );
         return;
       }
       setVersion(payload.data.version);
-      setVisit((current) => current ? {
-        ...current,
-        status: "cancelled",
-        version: payload.data.version,
-        can_edit: false,
-      } : current);
+      setVisit((current) =>
+        current
+          ? {
+              ...current,
+              status: "cancelled",
+              version: payload.data.version,
+              can_edit: false,
+            }
+          : current,
+      );
       setIsDirty(false);
       sessionStorage.removeItem(draftKey);
       setShowCancelConfirmation(false);
@@ -318,8 +358,12 @@ export function VisitDetail({
     }
   }
 
-  if (loadError) return <div className="p-8 text-sm text-red-600">{loadError}</div>;
-  if (!visit) return <div className="p-8 text-sm text-[#5A7799]">Đang tải lần khám...</div>;
+  if (loadError)
+    return <div className="p-8 text-sm text-red-600">{loadError}</div>;
+  if (!visit)
+    return (
+      <div className="p-8 text-sm text-[#5A7799]">Đang tải lần khám...</div>
+    );
 
   const busy = isSaving || isCompleting || isCancelling;
   const patientAge = ageFromDate(visit.patient_date_of_birth);
@@ -330,7 +374,11 @@ export function VisitDetail({
           <div className="flex min-w-0 items-center gap-5">
             <Link
               href={`/patients/${patientId}?tab=${returnTab}`}
-              aria-label={returnTab === "history" ? "Lịch sử khám bệnh nhân" : "Hồ sơ bệnh nhân"}
+              aria-label={
+                returnTab === "history"
+                  ? "Lịch sử khám bệnh nhân"
+                  : "Hồ sơ bệnh nhân"
+              }
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#5A7799] transition hover:bg-[#F3F7FC] hover:text-[#2F78C8]"
             >
               <ArrowLeft size={25} strokeWidth={1.8} />
@@ -338,7 +386,9 @@ export function VisitDetail({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-[14px] font-extrabold uppercase tracking-[0.045em] text-[#2F78C8]">
-                  {visit.status === "in_progress" ? "Lần khám mới" : "Chi tiết lần khám"}
+                  {visit.status === "in_progress"
+                    ? "Lần khám mới"
+                    : "Chi tiết lần khám"}
                 </span>
                 <span className="rounded-full bg-[#E6F1FC] px-3.5 py-1 text-[12px] font-bold text-[#2F78C8]">
                   {statusLabels[visit.status]}
@@ -368,25 +418,30 @@ export function VisitDetail({
             </div>
           </div>
           <div className="shrink-0 pl-[60px] text-left lg:pl-0 lg:text-right">
-            <p className="text-[14px] font-bold text-[#173A5E]">{visit.doctor_name}</p>
+            <p className="text-[14px] font-bold text-[#173A5E]">
+              {visit.doctor_name}
+            </p>
             <p className="mt-1 flex items-center gap-1.5 text-[13px] text-[#6F89A8] lg:justify-end">
               <Clock3 size={15} className="text-[#9EC9F3]" />
               {formatDateTime(visit.started_at)}
             </p>
-            {visit.status === "in_progress" && visit.updated_at !== visit.started_at && (
-              <p className="mt-1 text-[12px] text-[#8AA3BF]">
-                Chỉnh sửa lúc {formatDateTime(visit.updated_at)}
-              </p>
-            )}
+            {visit.status === "in_progress" &&
+              visit.updated_at !== visit.started_at && (
+                <p className="mt-1 text-[12px] text-[#8AA3BF]">
+                  Chỉnh sửa lúc {formatDateTime(visit.updated_at)}
+                </p>
+              )}
           </div>
         </div>
       </header>
 
       <div className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,2.08fr)_minmax(350px,1fr)]">
-        <VisitMockClinicalPanels />
+        <VisitClinicalPanels patientId={patientId} visitId={visitId} />
 
         <section className="rounded-[22px] border border-[#DFEAF5] bg-white p-7 shadow-[0_2px_5px_rgba(23,58,94,0.08)] sm:p-8">
-          <h2 className="text-[18px] font-extrabold text-[#173A5E]">Ghi chú lần khám</h2>
+          <h2 className="text-[18px] font-extrabold text-[#173A5E]">
+            Ghi chú lần khám
+          </h2>
           <p className="mt-6 max-w-[390px] text-[14px] leading-5 text-[#6F89A8]">
             Nhập nhận xét lâm sàng hoặc hướng theo dõi tiếp theo
           </p>
@@ -411,7 +466,13 @@ export function VisitDetail({
             {visit.can_edit && (
               <div className="mt-3 flex items-center justify-between gap-4 text-[12px]">
                 <span className="text-[#6F89A8]">Trạng thái dữ liệu:</span>
-                <span className={isDirty ? "font-semibold text-amber-600" : "font-semibold text-[#5A7799]"}>
+                <span
+                  className={
+                    isDirty
+                      ? "font-semibold text-amber-600"
+                      : "font-semibold text-[#5A7799]"
+                  }
+                >
                   {isDirty
                     ? "Có thay đổi chưa lưu"
                     : lastSavedAt
@@ -422,7 +483,9 @@ export function VisitDetail({
             )}
           </div>
 
-          {saveError && <p className="mt-4 text-sm leading-5 text-red-600">{saveError}</p>}
+          {saveError && (
+            <p className="mt-4 text-sm leading-5 text-red-600">{saveError}</p>
+          )}
 
           {visit.can_edit && (
             <div className="mt-7 space-y-3">
@@ -446,7 +509,11 @@ export function VisitDetail({
                   disabled={!isDirty || busy}
                   className="flex h-10 items-center justify-center gap-2 rounded-xl border border-[#CFE1F3] bg-white text-[12px] font-bold text-[#2F78C8] transition hover:bg-[#F4F8FD] disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}
+                  {isSaving ? (
+                    <LoaderCircle size={15} className="animate-spin" />
+                  ) : (
+                    <Save size={15} />
+                  )}
                   {isSaving ? "Đang lưu..." : "Lưu ghi chú"}
                 </button>
                 <button
@@ -463,17 +530,93 @@ export function VisitDetail({
           )}
         </section>
       </div>
-      {pendingNavigation && <Modal title="Bạn có thay đổi chưa được lưu." description="Vui lòng lưu trước khi rời khỏi trang." error={saveError} actions={<><button type="button" disabled={busy} onClick={() => setPendingNavigation(null)} className="btn-secondary">Ở lại</button><button type="button" disabled={busy} onClick={() => void saveAndNavigate()} className="btn-primary disabled:opacity-50">{isSaving ? "Đang lưu..." : "Lưu và tiếp tục"}</button></>} />}
-      {showCancelConfirmation && <Modal title="Hủy lần khám?" description={`Lần khám sẽ chuyển sang chỉ xem.${isDirty ? " Các thay đổi chưa lưu hiện tại sẽ bị bỏ qua." : ""}`} actions={<><button type="button" disabled={isCancelling} onClick={() => setShowCancelConfirmation(false)} className="btn-secondary">Quay lại</button><button type="button" disabled={isCancelling} onClick={() => void cancelVisit()} className="btn-primary !bg-red-600 disabled:opacity-50">{isCancelling ? "Đang hủy..." : "Xác nhận hủy"}</button></>} />}
+      {pendingNavigation && (
+        <Modal
+          title="Bạn có thay đổi chưa được lưu."
+          description="Vui lòng lưu trước khi rời khỏi trang."
+          error={saveError}
+          actions={
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setPendingNavigation(null)}
+                className="btn-secondary"
+              >
+                Ở lại
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void saveAndNavigate()}
+                className="btn-primary disabled:opacity-50"
+              >
+                {isSaving ? "Đang lưu..." : "Lưu và tiếp tục"}
+              </button>
+            </>
+          }
+        />
+      )}
+      {showCancelConfirmation && (
+        <Modal
+          title="Hủy lần khám?"
+          description={`Lần khám sẽ chuyển sang chỉ xem.${isDirty ? " Các thay đổi chưa lưu hiện tại sẽ bị bỏ qua." : ""}`}
+          actions={
+            <>
+              <button
+                type="button"
+                disabled={isCancelling}
+                onClick={() => setShowCancelConfirmation(false)}
+                className="btn-secondary"
+              >
+                Quay lại
+              </button>
+              <button
+                type="button"
+                disabled={isCancelling}
+                onClick={() => void cancelVisit()}
+                className="btn-primary !bg-red-600 disabled:opacity-50"
+              >
+                {isCancelling ? "Đang hủy..." : "Xác nhận hủy"}
+              </button>
+            </>
+          }
+        />
+      )}
     </div>
   );
 }
 
-function Modal({ title, description, error, actions }: { title: string; description: string; error?: string; actions: React.ReactNode }) {
-  return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#173A5E]/45 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"><h2 className="text-lg font-bold">{title}</h2><p className="mt-2 text-sm text-[#5A7799]">{description}</p>{error && <p className="mt-3 text-sm text-red-600">{error}</p>}<div className="mt-6 flex justify-end gap-2">{actions}</div></div></div>;
+function Modal({
+  title,
+  description,
+  error,
+  actions,
+}: {
+  title: string;
+  description: string;
+  error?: string;
+  actions: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#173A5E]/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        <h2 className="text-lg font-bold">{title}</h2>
+        <p className="mt-2 text-sm text-[#5A7799]">{description}</p>
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        <div className="mt-6 flex justify-end gap-2">{actions}</div>
+      </div>
+    </div>
+  );
 }
 
-function VisitMockClinicalPanels() {
+function VisitClinicalPanels({
+  patientId,
+  visitId,
+}: {
+  patientId: string;
+  visitId: string;
+}) {
   const trend = [89, 90, 89, 90, 89, 89];
   return (
     <div className="space-y-8">
@@ -484,8 +627,9 @@ function VisitMockClinicalPanels() {
               <Activity size={25} />
             </span>
             <div>
-              <h2 className="text-[18px] font-extrabold text-[#173A5E]">SpO₂</h2>
-              <p className="text-[14px] text-[#6F89A8]">Dữ liệu thời gian thực từ cảm biến kẹp ngón</p>
+              <h2 className="text-[18px] font-extrabold text-[#173A5E]">
+                SpO₂
+              </h2>
             </div>
           </div>
           <span className="inline-flex items-center gap-2 rounded-full border border-[#DFEAF5] bg-[#F5F8FC] px-4 py-2 text-[13px] text-[#6482A5]">
@@ -495,17 +639,29 @@ function VisitMockClinicalPanels() {
         </div>
         <div className="mt-6 flex flex-col gap-5 rounded-[17px] border border-[#D9E9F8] bg-[#FBFDFF] px-5 py-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <b className="text-[38px] font-extrabold leading-none tracking-[-0.04em] text-[#EF4444] sm:text-[42px]">89%</b>
-            <span className="rounded-full bg-red-50 px-3 py-1 text-[13px] font-bold text-[#EF4444]">Cần theo dõi</span>
-            <span className="text-[14px] text-[#6F89A8]">Cập nhật vài giây trước</span>
+            <b className="text-[38px] font-extrabold leading-none tracking-[-0.04em] text-[#EF4444] sm:text-[42px]">
+              89%
+            </b>
+            <span className="rounded-full bg-red-50 px-3 py-1 text-[13px] font-bold text-[#EF4444]">
+              Cần theo dõi
+            </span>
+            <span className="text-[14px] text-[#6F89A8]">
+              Cập nhật vài giây trước
+            </span>
           </div>
           <div className="flex items-end gap-3 self-end sm:self-auto">
-            <span className="pb-1 text-[12px] uppercase tracking-wide text-[#9EC9F3]">Xu hướng:</span>
+            <span className="pb-1 text-[12px] uppercase tracking-wide text-[#9EC9F3]">
+              Xu hướng:
+            </span>
             <div className="flex items-end gap-2">
               {trend.map((value, index) => (
                 <div key={`${value}-${index}`} className="text-center">
-                  <small className="block text-[10px] text-[#6482A5]">{value}</small>
-                  <i className={`mt-1 block h-8 w-3 rounded-full ${index % 3 === 1 ? "bg-[#2F78C8]" : "bg-[#EF4444]"}`} />
+                  <small className="block text-[10px] text-[#6482A5]">
+                    {value}
+                  </small>
+                  <i
+                    className={`mt-1 block h-8 w-3 rounded-full ${index % 3 === 1 ? "bg-[#2F78C8]" : "bg-[#EF4444]"}`}
+                  />
                 </div>
               ))}
             </div>
@@ -513,42 +669,7 @@ function VisitMockClinicalPanels() {
         </div>
       </section>
 
-      <section className="rounded-[22px] border border-[#DFEAF5] bg-white p-6 shadow-[0_2px_5px_rgba(23,58,94,0.08)] sm:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <span className="flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#E7F2FC] text-[#2F78C8]">
-              <Stethoscope size={25} />
-            </span>
-            <div>
-              <h2 className="text-[18px] font-extrabold text-[#173A5E]">Âm phổi</h2>
-              <p className="text-[14px] text-[#6F89A8]">Ống nghe sẽ đồng bộ tự động khi áp vào cơ thể</p>
-            </div>
-          </div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-[#DFEAF5] bg-[#F5F8FC] px-4 py-2 text-[13px] text-[#6482A5]">
-            <i className="h-2.5 w-2.5 rounded-full bg-[#82B4E7]" />
-            STETHO-001 · Đã kết nối
-          </span>
-        </div>
-
-        <div className="mt-7 flex min-h-[300px] flex-col items-center justify-center rounded-[18px] border border-[#CFE4F8] bg-[linear-gradient(180deg,#FCFEFF_0%,#FFFFFF_100%)] px-6 text-center">
-          <span className="flex h-20 w-20 items-center justify-center rounded-full border border-[#BFDDF7] bg-[#E7F2FC] text-[#2F78C8]">
-            <Stethoscope size={35} />
-          </span>
-          <h3 className="mt-5 text-[17px] font-extrabold text-[#173A5E]">Đang chờ bản ghi từ ống nghe…</h3>
-          <p className="mt-2 text-[14px] text-[#6F89A8]">Áp ống nghe vào vị trí cần nghe. Bản ghi sẽ được đồng bộ tự động.</p>
-          <button type="button" className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#2F78C8] bg-white px-5 py-2.5 text-[14px] font-bold text-[#2F78C8] transition hover:bg-[#F4F8FD]">
-            <Wifi size={17} />
-            Mô phỏng áp ống nghe lên ngực
-          </button>
-        </div>
-
-        <div className="mt-8 border-t border-[#E4EDF6] pt-5">
-          <h3 className="text-[15px] font-extrabold text-[#173A5E]">Âm phổi trong lần khám (0 bản ghi)</h3>
-          <div className="mt-5 rounded-[16px] bg-[#F3F7FC] px-6 py-8 text-center text-[14px] text-[#6F89A8]">
-            Chưa có bản ghi âm phổi nào trong lần khám này. Vui lòng áp ống nghe để thu nhận tín hiệu.
-          </div>
-        </div>
-      </section>
+      <VisitRecordingPanel patientId={patientId} visitId={visitId} />
     </div>
   );
 }

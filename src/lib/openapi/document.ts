@@ -49,6 +49,12 @@ export const openApiDocument = {
         description:
           "Supabase Auth access token. Use example values only in shared documentation.",
       },
+      deviceKey: {
+        type: "apiKey",
+        in: "header",
+        name: "X-Device-Key",
+        description: "Firmware device credential. Never place a real key in shared documentation.",
+      },
     },
     schemas: openApiSchemas,
     responses: commonOpenApiResponses,
