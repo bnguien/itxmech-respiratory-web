@@ -142,6 +142,35 @@ function getInitialEvents(referenceDate: Date = new Date()): Record<string, Sche
   const base: Record<string, ScheduleItem[]> = { ...INITIAL_EVENTS };
   const todayKey = getDateKey(referenceDate);
 
+  const appointments = [
+    { title: "Khám hô hấp & đo SpO₂", name: "Nguyễn Thị Lan" },
+    { title: "Tái khám và ghi âm phổi", name: "Trần Văn Mạnh" },
+    { title: "Kiểm tra bản ghi âm phổi", name: "Phạm Đức Thành" },
+    { title: "Đánh giá kết quả phân loại âm phổi", name: "Đỗ Hữu Trí" },
+    { title: "Khám định kỳ hô hấp", name: "Vũ Thị Mai" },
+    { title: "Theo dõi triệu chứng & đo SpO₂", name: "Hoàng Văn Nam" },
+    { title: "Tái khám sau điều trị", name: "Lê Thị Thu Hà" },
+    { title: "Ghi âm và đánh giá chu kỳ hô hấp", name: "Nguyễn Văn C" },
+  ];
+
+  // Fixed demo schedule through 30 October; Sundays are days off.
+  for (let day = 8; day <= 30; day++) {
+    const date = new Date(2026, 9, day);
+    const key = getDateKey(date);
+    const weekday = date.getDay();
+    const times = weekday === 0 ? [] : weekday === 6
+      ? ["08:30", "10:00"]
+      : ["08:00", "09:30", "14:00", "15:30"];
+    base[key] = times.map((time, index) => ({
+      id: `mock-schedule-${key}-${index}`,
+      time,
+      ...appointments[((day - 8) * 3 + index) % appointments.length],
+      completed: false,
+    }));
+  }
+
+  if (todayKey >= "2026-10-08" && todayKey <= "2026-10-30") return base;
+
   if (!base[todayKey]) {
     base[todayKey] = [
       {

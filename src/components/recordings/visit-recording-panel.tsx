@@ -1,15 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useRecordingRealtime } from "@/lib/recordings/use-recording-realtime";
 import { AlertCircle, LoaderCircle, Stethoscope } from "lucide-react";
-import { RecordingWaveform } from "./recording-waveform";
+import { VisitRecordingAnalysis } from "./visit-recording-analysis";
 import type { Recording } from "@/types/recording";
 import type { ApiError } from "@/types/visit";
-
-function duration(value: number | null) {
-  if (value === null) return "—";
-  return `${(value / 1000).toFixed(1)} giây`;
-}
 
 export function VisitRecordingPanel({
   patientId,
@@ -18,22 +14,32 @@ export function VisitRecordingPanel({
   patientId: string;
   visitId: string;
 }) {
+  return <VisitRecordingContent key={`${patientId}:${visitId}`} patientId={patientId} visitId={visitId} />;
+}
+
+function VisitRecordingContent({ patientId, visitId }: { patientId: string; visitId: string }) {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refresh, setRefresh] = useState(0);
+  const realtime = useRecordingRealtime("visit_id", visitId);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    const controller = new AbortController();
+    async function load() {
     try {
       const response = await fetch(
         `/api/patients/${patientId}/visits/${visitId}/recording`,
-        { cache: "no-store" },
+        { cache: "no-store", signal: controller.signal },
       );
+      if (controller.signal.aborted) return;
       if (response.status === 404) {
         setRecording(null);
         setError("");
         return;
       }
       const payload = (await response.json()) as { data: Recording } | ApiError;
+      if (controller.signal.aborted) return;
       if (!response.ok || !("data" in payload)) {
         setError(
           (payload as ApiError).error?.message || "Không thể tải bản ghi âm.",
@@ -43,23 +49,14 @@ export function VisitRecordingPanel({
       setRecording(payload.data);
       setError("");
     } catch {
-      setError("Không thể tải bản ghi âm.");
+      if (!controller.signal.aborted) setError("Không thể tải bản ghi âm.");
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
-  }, [patientId, visitId]);
-
-  useEffect(() => {
-    // Fetch the external recording state when this Visit changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    }
     void load();
-  }, [load]);
-
-  useEffect(() => {
-    if (recording?.upload_status !== "waiting_upload") return;
-    const timer = window.setInterval(() => void load(), 2500);
-    return () => window.clearInterval(timer);
-  }, [load, recording?.upload_status]);
+    return () => controller.abort();
+  }, [patientId, visitId, realtime.revision, refresh]);
 
   return (
     <section className="rounded-[22px] border border-[#DFEAF5] bg-white p-6 shadow-[0_2px_5px_rgba(23,58,94,0.08)] sm:p-8">
@@ -75,16 +72,11 @@ export function VisitRecordingPanel({
         </div>
       </div>
       <div className="mt-7 rounded-[18px] border border-[#CFE4F8] bg-[#FCFEFF] p-6">
+        {(realtime.error || error) && <div className="mb-4 text-sm text-red-600"><p role="alert">{realtime.error || error}</p><button type="button" className="btn-secondary mt-2" onClick={() => setRefresh((value) => value + 1)}>Tải lại kết quả</button></div>}
         {loading && (
           <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-[#6F89A8]">
             <LoaderCircle size={18} className="animate-spin" />
             Đang tải bản ghi…
-          </div>
-        )}
-        {!loading && error && (
-          <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-red-600">
-            <AlertCircle size={18} />
-            {error}
           </div>
         )}
         {!loading && !error && !recording && (
@@ -113,15 +105,7 @@ export function VisitRecordingPanel({
           </div>
         )}
         {!loading && !error && recording?.upload_status === "uploaded" && (
-          <div className="space-y-5">
-            <RecordingWaveform recordingId={recording.id} />
-            <p className="text-sm text-[#5A7799]">
-              Thời lượng:{" "}
-              <b className="text-[#173A5E]">
-                {duration(recording.duration_ms)}
-              </b>
-            </p>
-          </div>
+          <VisitRecordingAnalysis key={recording.id} recording={recording} reviewHref={`/recordings/${recording.id}?from=visit&patientId=${patientId}&visitId=${visitId}`} />
         )}
       </div>
     </section>

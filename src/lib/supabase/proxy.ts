@@ -17,9 +17,9 @@ const publicApiRoutes = new Set([
   "/api/health",
 ]);
 
-// Patient handlers perform their own authenticated doctor check. Letting them
-// pass through avoids verifying the same Supabase token twice per request.
-const selfAuthenticatedApiPrefixes = ["/api/patients", "/api/recordings"];
+// Patient/recording handlers authenticate doctors themselves. Device handlers
+// exclusively validate X-Device-Key and must not require a Supabase session.
+const selfAuthenticatedApiPrefixes = ["/api/patients", "/api/recordings", "/api/device"];
 
 function isProtectedPage(pathname: string) {
   return protectedPagePrefixes.some(

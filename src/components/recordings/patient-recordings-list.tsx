@@ -96,6 +96,7 @@ export function PatientRecordingsList({ patientId }: { patientId: string }) {
                   >
                     Mở lần khám
                   </Link>
+                  {recording.upload_status === "uploaded" && <Link className="btn-secondary" href={`/recordings/${recording.id}?from=patient&patientId=${patientId}`}>Đánh giá AI</Link>}
                 </div>
               </div>
               {recording.upload_status === "uploaded" && (

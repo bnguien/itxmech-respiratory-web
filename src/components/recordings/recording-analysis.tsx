@@ -1,349 +1,378 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
+  AlertCircle,
   ArrowLeft,
-  Check,
-  CheckCircle2,
-  CircleAlert,
-  Pause,
-  Pencil,
-  Play,
-  X,
+  AudioLines,
+  LoaderCircle,
+  RefreshCw,
 } from "lucide-react";
-import type { Recording } from "@/types/clinical";
-import { type AudioWaveformHandle } from "./audio-waveform";
-import { LungSoundWaveformCard } from "./lung-sound-waveform-card";
-import { SoundLabel } from "@/components/ui/status-badge";
-import { CycleClassificationSelect } from "./cycle-classification-select";
+import type {
+  AnalyzedCycle,
+  CycleReviewRequest,
+  RecordingAnalysisData,
+} from "@/types/analysis";
+import { recordingAnalysisService } from "@/services/recording-analysis.service";
+import {
+  RecordingWaveform,
+  type RecordingWaveformHandle,
+} from "./recording-waveform";
+import { CycleAnalysisDetails } from "./cycle-analysis-details";
+import { useRecordingRealtime } from "@/lib/recordings/use-recording-realtime";
+import { RecordingPatientHeader } from "./recording-patient-header";
 
-export function RecordingAnalysis({ recording }: { recording: Recording }) {
+export function RecordingAnalysis({ recordingId }: { recordingId: string }) {
+  const realtime = useRecordingRealtime("id", recordingId);
   const searchParams = useSearchParams();
-  const from = searchParams.get("from");
-  const queryPatientId = searchParams.get("patientId");
-  const tab = searchParams.get("tab");
+  const patientId = searchParams.get("patientId");
   const visitId = searchParams.get("visitId");
-  const returnTab = searchParams.get("returnTab");
+  const from = searchParams.get("from");
+  const backHref =
+    patientId && from === "visit" && visitId
+      ? `/patients/${encodeURIComponent(patientId)}/visits/${encodeURIComponent(visitId)}`
+      : patientId
+        ? `/patients/${encodeURIComponent(patientId)}?tab=sound`
+        : "/recordings";
+  const [data, setData] = useState<RecordingAnalysisData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refresh, setRefresh] = useState(0);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [savingReview, setSavingReview] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [audioReady, setAudioReady] = useState(false);
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
+  const waveform = useRef<RecordingWaveformHandle>(null);
+  const readController = useRef<AbortController | null>(null);
 
-  const effectivePatientId = queryPatientId || recording.patientId;
-
-  let backHref = "/recordings";
-  let backLabel = "Danh sách bản ghi";
-
-  if (from === "visit" && visitId) {
-    backHref = `/patients/${effectivePatientId}/visits/${visitId}${returnTab ? `?from=${returnTab}` : ""}`;
-    backLabel = "Chi tiết lần khám";
-  } else if (from === "patient" || queryPatientId) {
-    const targetTab = tab || "sound";
-    backHref = `/patients/${effectivePatientId}?tab=${targetTab}`;
-    const tabLabels: Record<string, string> = {
-      sound: "Âm phổi bệnh nhân",
-      overview: "Tổng quan bệnh nhân",
-      spo2: "SpO₂ bệnh nhân",
-      history: "Lịch sử khám bệnh nhân",
-      notes: "Ghi chú bệnh nhân",
+  useEffect(() => {
+    const controller = new AbortController();
+    readController.current = controller;
+    async function load() {
+      if (controller.signal.aborted) return;
+      try {
+        const result = await recordingAnalysisService.get(
+          recordingId,
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        setData(result);
+        setError("");
+      } catch {
+        if (!controller.signal.aborted)
+          setError("Không thể tải phân tích. Vui lòng thử lại.");
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+    void load();
+    return () => {
+      controller.abort();
     };
-    backLabel = tabLabels[targetTab] || "Hồ sơ bệnh nhân";
+  }, [recordingId, refresh, realtime.revision]);
+
+  const reload = () => {
+    setError("");
+    setLoading(!data);
+    setRefresh((value) => value + 1);
+  };
+  const busy = analyzing || data?.recording.analysis_status === "analyzing";
+  const selected =
+    data?.cycles.find((cycle) => cycle.id === selectedId) ??
+    data?.cycles[0] ??
+    null;
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId(id);
+    setNotice("");
+  }, []);
+
+  async function analyze() {
+    readController.current?.abort();
+    setAnalyzing(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await recordingAnalysisService.analyze(recordingId);
+      setData(result);
+      // Read persisted state after a concurrent analysis claim.
+      if (result.recording.analysis_status === "analyzing")
+        setRefresh((value) => value + 1);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Không thể phân tích bản ghi.",
+      );
+      // Read the persisted failure/in-progress state without discarding previously reviewed cycles.
+      try {
+        const result = await recordingAnalysisService.get(recordingId);
+        setData(result);
+        if (result.recording.analysis_status === "analyzing")
+          setRefresh((value) => value + 1);
+      } catch {
+        /* Keep the visible last result. */
+      }
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
-  const waveformRef = useRef<AudioWaveformHandle>(null);
-  const [confirmed, setConfirmed] = useState(recording.status === "confirmed");
-  const [editing, setEditing] = useState(false);
-  const [classes, setClasses] = useState(
-    recording.cycles.map((cycle) => cycle.classification),
-  );
-  const [draftClasses, setDraftClasses] = useState(classes);
-  const [note, setNote] = useState(recording.note || "");
-  const [playingCycleId, setPlayingCycleId] = useState<string | null>(null);
-  const handleCyclePlaybackChange = useCallback(
-    (cycleId: string | null) => setPlayingCycleId(cycleId),
-    [],
-  );
-  const analyzedCycles = useMemo(
-    () =>
-      recording.cycles.map((cycle, index) => ({
-        ...cycle,
-        classification: classes[index],
-      })),
-    [classes, recording.cycles],
-  );
-  const counts = {
-    Normal: classes.filter((value) => value === "Normal").length,
-    Crackles: classes.filter((value) => value === "Crackles").length,
-    Wheezes: classes.filter((value) => value === "Wheezes").length,
-    Both: classes.filter((value) => value === "Crackles + Wheezes").length,
-  };
+  async function review(cycle: AnalyzedCycle, request: CycleReviewRequest) {
+    readController.current?.abort();
+    setSavingReview(true);
+    setNotice("");
+    try {
+      const result = await recordingAnalysisService.review(
+        recordingId,
+        cycle.id,
+        request,
+      );
+      setData(result);
+      setNotice(`Đã lưu đánh giá chu kỳ ${cycle.cycle_index + 1}.`);
+    } finally {
+      setSavingReview(false);
+    }
+  }
 
-  const startEditing = () => {
-    setDraftClasses(classes);
-    setEditing(true);
-  };
+  function select(cycle: AnalyzedCycle) {
+    handleSelect(cycle.id);
+    waveform.current?.selectCycle(cycle);
+  }
 
-  const saveEditing = () => {
-    setClasses(draftClasses);
-    setEditing(false);
-  };
-
-  const cancelEditing = () => {
-    setDraftClasses(classes);
-    setEditing(false);
-  };
+  const duration =
+    audioDuration ??
+    (data?.recording.duration_ms == null
+      ? null
+      : data.recording.duration_ms / 1000);
+  const counts = data?.cycles.reduce(
+    (counts, cycle) => {
+      counts[cycle.review_status] += 1;
+      return counts;
+    },
+    { pending: 0, confirmed: 0, corrected: 0 },
+  );
 
   return (
-    <div className="w-full p-5 sm:p-8 lg:p-12">
+    <div className="page space-y-6">
       <Link
         href={backHref}
         className="inline-flex items-center gap-2 text-sm font-semibold text-[#5A7799] hover:text-[#2F78C8]"
       >
         <ArrowLeft size={17} />
-        {backLabel}
+        {patientId
+          ? from === "visit"
+            ? "Chi tiết lần khám"
+            : "Âm phổi bệnh nhân"
+          : "Danh sách bản ghi"}
       </Link>
-      <header className="mt-6 flex flex-col justify-between gap-4 border-b border-[#E1ECF7] pb-7 lg:flex-row lg:items-center">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[#E7F1FB] pb-5">
         <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-extrabold">{recording.patientName}</h1>
-            <span className="rounded-lg bg-[#F1F6FB] px-3 py-1 font-mono text-sm text-[#5A7799]">
-              {recording.patientCode}
-            </span>
-            <span
-              className={`rounded-lg px-3 py-1 text-sm font-bold ${confirmed ? "bg-[#EAF4FD] text-[#2F78C8]" : "bg-[#FFF0F1] text-[#EF4444]"}`}
-            >
-              {confirmed ? "Đã xác nhận" : "Chờ duyệt"}
-            </span>
-          </div>
-          <p className="mt-2 text-sm text-[#5A7799]">
-            {recording.recordedAt}&nbsp;&nbsp;·&nbsp;&nbsp;{recording.duration}{" "}
-            giây&nbsp;&nbsp;·&nbsp;&nbsp;{recording.deviceId}
+          <p className="eyebrow">RespiratoryCare · Âm phổi</p>
+          <h1 className="mt-2 page-title">
+            Phân tích & đánh giá chu kỳ hô hấp
+          </h1>
+          <p className="page-subtitle">
+            Nghe từng chu kỳ, đối chiếu kết quả AI và lưu đánh giá của bác sĩ.
           </p>
         </div>
-        <Link
-          href={`/patients/${effectivePatientId}${tab ? `?tab=${tab}` : ""}`}
-          className="text-sm font-bold text-[#2F78C8]"
-        >
-          Xem hồ sơ bệnh nhân →
-        </Link>
+        {data && (
+          <button
+            type="button"
+            onClick={reload}
+            disabled={savingReview || analyzing}
+            className="btn-secondary hover:bg-[#F4F8FD] disabled:opacity-50"
+          >
+            <RefreshCw size={14} />
+            Tải lại kết quả
+          </button>
+        )}
       </header>
+      {realtime.error && <p role="alert" className="text-sm text-red-700">{realtime.error}</p>}
 
-      <div className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,1.75fr)_minmax(330px,.85fr)]">
-        <main className="space-y-8">
-          <section className="flex flex-col justify-between gap-5 rounded-3xl border border-[#CCE2F7] bg-[#F2F7FD] px-7 py-6 sm:flex-row sm:items-center">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wide text-[#8BBCEC]">
-                Kết quả tổng hợp AI
-              </span>
-              <p className="mt-2 text-xl font-extrabold text-[#EF4444]">
-                {recording.classification}{" "}
-                <small className="font-medium text-[#5A7799]">
-                  ({recording.confidence}%)
-                </small>
-              </p>
+      <RecordingPatientHeader key={recordingId} recordingId={recordingId} />
+
+      {loading && (
+        <div
+          role="status"
+          className="card flex min-h-64 items-center justify-center gap-3 p-8 text-sm text-[#5A7799]"
+        >
+          <LoaderCircle className="animate-spin" size={20} />
+          Đang tải phân tích bản ghi…
+        </div>
+      )}
+      {error && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={reload}
+            className="btn-secondary"
+            disabled={savingReview || analyzing}
+          >
+            Thử tải lại
+          </button>
+        </div>
+      )}
+
+      {data && !loading && (
+        <>
+          {busy ? (
+            <div
+              role="status"
+              className="flex items-center gap-3 rounded-xl border border-[#CFE2F5] bg-[#E7F1FB] p-4 text-sm text-[#2563A6]"
+            >
+              <LoaderCircle size={19} className="shrink-0 animate-spin" />
+              <div>
+                <b>Đang phân tích âm phổi…</b>
+                <p className="mt-1">
+                  Kết quả sẽ tự cập nhật. Đánh giá tạm khóa trong lúc phân tích.
+                </p>
+              </div>
             </div>
-            <div className="grid grid-cols-5 divide-x divide-[#D3E5F7] text-center">
-              <div className="px-5">
-                <b className="text-xl">{recording.cycles.length}</b>
-                <small className="block text-[#8BBCEC]">Chu kỳ</small>
-              </div>
-              <div className="px-5">
-                <b className="text-xl text-[#2F78C8]">{counts.Normal}</b>
-                <small className="block text-[#5A7799]">Normal</small>
-              </div>
-              <div className="px-5">
-                <b className="text-xl text-[#F59E0B]">{counts.Crackles}</b>
-                <small className="block text-[#5A7799]">Crackles</small>
-              </div>
-              <div className="px-5">
-                <b className="text-xl text-[#6366F1]">{counts.Wheezes}</b>
-                <small className="block text-[#5A7799]">Wheezes</small>
-              </div>
-              <div className="px-5">
-                <b className="text-xl text-[#EF4444]">{counts.Both}</b>
-                <small className="block text-[#5A7799]">Both</small>
-              </div>
-            </div>
-          </section>
-
-          <LungSoundWaveformCard
-            ref={waveformRef}
-            audioUrl={recording.audioUrl || `/audio/${recording.id}.wav`}
-            cycles={analyzedCycles}
-            duration={recording.duration}
-            onCyclePlaybackChange={handleCyclePlaybackChange}
-          />
-
-          <section className="card p-6 sm:p-8">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="whitespace-nowrap text-base font-extrabold sm:text-lg">
-                Chi tiết từng chu kỳ hô hấp
-              </h2>
-              {editing ? (
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={saveEditing}
-                    title="Lưu chỉnh sửa"
-                    aria-label="Lưu chỉnh sửa"
-                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2F78C8] text-white transition-colors hover:bg-[#286CB5]"
-                  >
-                    <Check size={19} strokeWidth={2.5} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelEditing}
-                    title="Hủy chỉnh sửa"
-                    aria-label="Hủy chỉnh sửa"
-                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#DDEAF8] bg-white text-[#5A7799] transition-colors hover:border-[#F3B8BC] hover:bg-[#FFF5F5] hover:text-[#E5484D]"
-                  >
-                    <X size={19} strokeWidth={2.5} />
-                  </button>
+          ) : data.recording.analysis_status === "not_analyzed" ? (
+            <div className="card flex flex-wrap items-center justify-between gap-4 p-5">
+              <div className="flex items-center gap-3">
+                <AudioLines size={24} className="text-[#2F78C8]" />
+                <div>
+                  <h2 className="text-sm font-bold">
+                    Bản ghi chưa được phân tích
+                  </h2>
+                  <p className="mt-1 text-xs text-[#5A7799]">
+                    Chạy AI để phân đoạn và phân loại từng chu kỳ.
+                  </p>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={startEditing}
-                  className="flex shrink-0 items-center gap-2 rounded-xl border border-[#CFE2F5] px-4 py-2.5 text-sm font-bold text-[#2F78C8] transition-colors hover:bg-[#F2F7FD]"
-                >
-                  <Pencil size={16} />
-                  Chỉnh sửa
-                </button>
+              </div>
+              <button
+                type="button"
+                disabled={data.recording.upload_status !== "uploaded"}
+                onClick={() => void analyze()}
+                className="btn-primary disabled:opacity-50"
+              >
+                Phân tích âm phổi
+              </button>
+            </div>
+          ) : data.recording.analysis_status === "failed" ? (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-5"
+            >
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-bold text-red-700">
+                  <AlertCircle size={18} />
+                  Phân tích thất bại
+                </h2>
+                <p className="mt-2 text-sm text-red-700">
+                  {data.recording.analysis_error ??
+                    "Không thể phân tích bản ghi. Vui lòng thử lại."}
+                </p>
+                {data.cycles.length > 0 && (
+                  <p className="mt-2 text-xs text-[#5A7799]">
+                    Đang hiển thị kết quả đã lưu từ lần phân tích trước.
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void analyze()}
+                disabled={
+                  savingReview || data.recording.upload_status !== "uploaded"
+                }
+                className="btn-secondary disabled:opacity-50"
+              >
+                Phân tích lại
+              </button>
+            </div>
+          ) : null}
+
+          <section
+            aria-label="Tổng quan dạng sóng"
+            className="card space-y-5 p-4 sm:p-6"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs text-[#5A7799]">
+                Nhãn hiển thị ưu tiên đánh giá bác sĩ
+              </span>
+            </div>
+            {data.recording.upload_status === "uploaded" ? (
+              <RecordingWaveform
+                ref={waveform}
+                recordingId={recordingId}
+                cycles={data.cycles}
+                selectedCycleId={selected?.id}
+                onSelectCycle={handleSelect}
+                onCyclePlaybackChange={setPlayingId}
+                onDurationChange={setAudioDuration}
+                onReadyChange={setAudioReady}
+              />
+            ) : (
+              <p className="rounded-xl bg-[#F4F8FD] p-6 text-sm text-[#5A7799]">
+                Bản ghi chưa sẵn sàng để phát.
+              </p>
+            )}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E7F1FB] pt-4 text-xs text-[#5A7799]">
+              <p>
+                Thời lượng:{" "}
+                <b className="text-[#173A5E]">
+                  {duration === null ? "—" : `${duration.toFixed(1)} giây`}
+                </b>
+                <span className="mx-3">·</span>Tổng số chu kỳ:{" "}
+                <b className="text-[#173A5E]">
+                  {data.cycles.length} chu kỳ hô hấp
+                </b>
+              </p>
+              {counts && (
+                <p aria-label="Tiến độ đánh giá">
+                  Chờ xác nhận: <b>{counts.pending}</b>
+                  <span className="mx-2">·</span>Đã xác nhận:{" "}
+                  <b>{counts.confirmed}</b>
+                  <span className="mx-2">·</span>Đã hiệu chỉnh:{" "}
+                  <b>{counts.corrected}</b>
+                </p>
               )}
             </div>
-
-            <div className="mt-6 divide-y divide-[#E1ECF7]">
-              {recording.cycles.map((cycle, index) => {
-                const isPlaying = playingCycleId === cycle.id;
-
-                return (
-                  <div
-                    key={cycle.id}
-                    className="grid items-center gap-3 py-4 text-sm md:grid-cols-[110px_150px_minmax(220px,1fr)_150px]"
-                  >
-                    <b>Chu kỳ {String(cycle.number).padStart(2, "0")}</b>
-                    <span className="font-mono text-[#8BBCEC]">
-                      {cycle.start}s – {cycle.end}s
-                    </span>
-
-                    <div className="min-w-0 md:max-w-[320px]">
-                      {editing ? (
-                        <CycleClassificationSelect
-                          value={draftClasses[index]}
-                          onChange={(nextClass) =>
-                            setDraftClasses((current) =>
-                              current.map((value, itemIndex) =>
-                                itemIndex === index ? nextClass : value,
-                              ),
-                            )
-                          }
-                        />
-                      ) : (
-                        <div className="flex min-h-11 items-center whitespace-nowrap">
-                          <SoundLabel value={classes[index]} />
-                          <small className="ml-2 text-[#9EC9F3]">
-                            ({cycle.confidence}%)
-                          </small>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex w-[150px] items-center">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          isPlaying
-                            ? waveformRef.current?.pause()
-                            : waveformRef.current?.playCycle({
-                                ...cycle,
-                                classification: classes[index],
-                              })
-                        }
-                        className={`flex w-[138px] items-center gap-2 font-semibold ${isPlaying ? "text-[#2F78C8]" : "text-[#5A7799] hover:text-[#2F78C8]"}`}
-                      >
-                        {isPlaying ? (
-                          <Pause size={14} fill="currentColor" />
-                        ) : (
-                          <Play size={14} fill="currentColor" />
-                        )}
-                        <span className="w-[108px] text-left">
-                          {isPlaying ? "Tạm dừng" : "Nghe đoạn này"}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </section>
-        </main>
 
-        <aside className="card sticky top-8 p-7">
-          <div className="flex items-center justify-between border-b border-[#E1ECF7] pb-5">
-            <h2 className="text-lg font-extrabold">Xác nhận của bác sĩ</h2>
-            <span className="rounded-lg bg-[#EAF4FD] px-3 py-1 text-xs font-bold text-[#2F78C8]">
-              Lâm sàng
-            </span>
-          </div>
-          <div className="mt-7 rounded-2xl bg-[#F2F7FD] p-5">
-            <span className="text-xs font-bold uppercase text-[#8BBCEC]">
-              Gợi ý từ AI:
-            </span>
-            <p className="mt-1 font-bold">
-              {recording.classification}{" "}
-              <small className="font-normal text-[#5A7799]">
-                (Độ tin cậy: {recording.confidence}%)
-              </small>
-            </p>
-          </div>
-          <h3 className="mt-7 text-sm font-bold">Đánh giá của bác sĩ:</h3>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <button
-              onClick={() => {
-                setConfirmed(true);
-                setEditing(false);
+          <p role="status" className="text-sm font-semibold text-[#2563A6]">
+            {notice}
+          </p>
+          {data.cycles.length === 0 &&
+            data.recording.analysis_status === "completed" && (
+              <div className="card p-10 text-center">
+                <AudioLines size={28} className="mx-auto text-[#5A7799]" />
+                <h2 className="mt-3 font-bold">Không có chu kỳ hô hấp</h2>
+                <p className="mt-2 text-sm text-[#5A7799]">
+                  Phân tích đã hoàn tất nhưng chưa phát hiện chu kỳ để đánh giá.
+                  Bạn vẫn có thể nghe toàn bộ bản ghi.
+                </p>
+              </div>
+            )}
+
+          {data.cycles.length > 0 && (
+            <CycleAnalysisDetails
+              cycles={data.cycles}
+              selected={selected}
+              playingId={playingId}
+              audioReady={audioReady}
+              disabled={busy || savingReview}
+              onSelect={select}
+              onPlay={(cycle) => {
+                handleSelect(cycle.id);
+                waveform.current?.playCycle(cycle);
               }}
-              className={`btn-secondary py-3 ${confirmed ? "border-[#2F78C8] bg-[#EAF4FD] text-[#2F78C8]" : ""}`}
-            >
-              <CheckCircle2 size={17} />
-              Xác nhận kết quả
-            </button>
-            <button
-              onClick={() => {
-                startEditing();
-                setConfirmed(false);
-              }}
-              className="btn-secondary py-3"
-            >
-              <Pencil size={17} />
-              Chỉnh sửa
-            </button>
-          </div>
-          <label className="mt-7 block text-sm font-bold">
-            Ghi chú lâm sàng của bác sĩ:
-            <textarea
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              className="field mt-3 min-h-28 resize-y bg-white font-normal"
-              placeholder="Ví dụ: Ran rít thì thở ra, kèm ran nổ thưa thớt đáy phổi phải..."
+              onPause={() => waveform.current?.pause()}
+              onReview={review}
             />
-          </label>
-          <button
-            onClick={() => {
-              setConfirmed(true);
-              setEditing(false);
-            }}
-            className="btn-primary mt-6 w-full py-3.5 text-sm"
-          >
-            Lưu xác nhận
-          </button>
-          <div className="mt-7 flex gap-3 border-t border-[#E1ECF7] pt-6 text-xs leading-6 text-[#9EC9F3]">
-            <CircleAlert size={18} className="shrink-0" />
-            <p>
-              Kết quả AI chỉ mang tính hỗ trợ và không thay thế đánh giá chuyên
-              môn của bác sĩ.
-            </p>
-          </div>
-        </aside>
-      </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
