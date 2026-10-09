@@ -55,7 +55,7 @@ export const recordingPaths = {
       operationId: "completeRecording",
       security: deviceSecurity,
       description:
-        "Idempotent khi đã uploaded. Server xác minh object và WAV PCM mono, 16-bit, 16 kHz; metadata firmware chỉ là gợi ý.",
+        "Idempotent khi đã uploaded. Server xác minh WAV PCM mono, 16-bit, 16 kHz và tự động khởi tạo phân tích lần đầu sau khi trả phản hồi upload. Completed tái sử dụng kết quả đã lưu; analyzing không tạo tác vụ trùng. Failed được thử lại qua endpoint analyze, không qua complete. Metadata firmware chỉ là gợi ý.",
       parameters: [
         uuidParam("recordingId"),
         {

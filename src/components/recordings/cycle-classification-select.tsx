@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import type { LungSound } from "@/types/clinical";
+import { cycleLabelStyles, legacyCycleLabel } from "@/lib/recordings/presentation";
 
 const options: LungSound[] = [
   "Normal",
@@ -11,12 +12,7 @@ const options: LungSound[] = [
   "Crackles + Wheezes",
 ];
 
-const optionColor: Record<LungSound, string> = {
-  Normal: "text-emerald-700",
-  Crackles: "text-amber-600",
-  Wheezes: "text-indigo-600",
-  "Crackles + Wheezes": "text-red-500",
-};
+const optionColor = (value: LungSound) => cycleLabelStyles[legacyCycleLabel[value]].text;
 
 interface CycleClassificationSelectProps {
   value: LungSound;
@@ -54,7 +50,7 @@ export function CycleClassificationSelect({
         onClick={() => setOpen((current) => !current)}
         className={`flex h-11 w-full items-center justify-between gap-3 rounded-xl border bg-white px-4 text-left text-sm font-semibold outline-none transition-colors ${open ? "border-[#2F78C8] ring-2 ring-[#D9EAFB]" : "border-[#DDEAF8] hover:border-[#AFCFEE]"}`}
       >
-        <span className={`truncate ${optionColor[value]}`}>{value}</span>
+        <span className={`truncate ${optionColor(value)}`}>{value}</span>
         <ChevronDown
           size={17}
           className={`shrink-0 text-[#5A7799] transition-transform ${open ? "rotate-180" : ""}`}
@@ -78,7 +74,7 @@ export function CycleClassificationSelect({
               }}
               className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition-colors ${option === value ? "bg-[#EEF6FD]" : "hover:bg-[#F7FAFD]"}`}
             >
-              <span className={optionColor[option]}>{option}</span>
+              <span className={optionColor(option)}>{option}</span>
               {option === value && (
                 <Check size={16} className="shrink-0 text-[#2F78C8]" />
               )}

@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { recordings } from "@/lib/db/schema/recordings";
+import { analyzeUploadedRecording } from "@/lib/recordings/analysis";
 import {
   authorizeDevice,
   internalRecordingError,
@@ -18,6 +19,9 @@ import {
 import { uuidPattern } from "@/lib/visits/validation";
 
 type Context = { params: Promise<{ recordingId: string }> };
+
+export const runtime = "nodejs";
+export const maxDuration = 180;
 
 function validBody(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -69,8 +73,10 @@ export async function POST(request: NextRequest, { params }: Context) {
       .limit(1);
     if (!current)
       return recordingError(404, "NOT_FOUND", "Không tìm thấy bản ghi âm.");
-    if (current.uploadStatus === "uploaded")
+    if (current.uploadStatus === "uploaded") {
+      await analyzeUploadedRecording(recordingId);
       return NextResponse.json({ data: serializeRecording(current) });
+    }
 
     const storage = createSupabaseAdminClient().storage.from(
       getLungRecordingsBucket(),
@@ -135,9 +141,12 @@ export async function POST(request: NextRequest, { params }: Context) {
         uploadedAt: now,
         updatedAt: now,
       })
-      .where(eq(recordings.id, recordingId))
+      .where(and(eq(recordings.id, recordingId), ne(recordings.uploadStatus, "uploaded")))
       .returning(recordingSelection);
-    return NextResponse.json({ data: serializeRecording(updated) });
+    // Another complete request may have validated the same upload first.
+    const completed = updated ?? (await db.select(recordingSelection).from(recordings).where(eq(recordings.id, recordingId)))[0];
+    await analyzeUploadedRecording(recordingId);
+    return NextResponse.json({ data: serializeRecording(completed) });
   } catch (error) {
     return internalRecordingError("Failed to complete recording", error);
   }
@@ -151,5 +160,5 @@ async function markFailed(recordingId: string, fileSizeBytes: number) {
       fileSizeBytes,
       updatedAt: new Date().toISOString(),
     })
-    .where(eq(recordings.id, recordingId));
+    .where(and(eq(recordings.id, recordingId), ne(recordings.uploadStatus, "uploaded")));
 }
