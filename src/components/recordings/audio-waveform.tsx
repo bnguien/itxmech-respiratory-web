@@ -12,33 +12,10 @@ import { Pause, Play, Volume2 } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
 import TimelinePlugin from "wavesurfer.js/dist/plugins/timeline.esm.js";
-import type { LungSound, RespiratoryCycle } from "@/types/clinical";
-
-const cycleStyle: Record<
-  LungSound,
-  { region: string; solid: string; text: string }
-> = {
-  Normal: {
-    region: "rgba(34, 197, 94, .13)",
-    solid: "#22A95A",
-    text: "text-emerald-700",
-  },
-  Crackles: {
-    region: "rgba(245, 158, 11, .14)",
-    solid: "#E89512",
-    text: "text-amber-700",
-  },
-  Wheezes: {
-    region: "rgba(99, 102, 241, .13)",
-    solid: "#6366F1",
-    text: "text-indigo-700",
-  },
-  "Crackles + Wheezes": {
-    region: "rgba(239, 68, 68, .12)",
-    solid: "#E84C4C",
-    text: "text-red-600",
-  },
-};
+import type { RespiratoryCycle } from "@/types/clinical";
+import { cycleLabelStyles, legacyCycleLabel } from "@/lib/recordings/presentation";
+import { cycleWaveformRenderer, preserveCycleProgressColors, styleCycleRegion } from "@/lib/recordings/waveform-presentation";
+import { LungSoundLegend } from "@/components/ui/status-badge";
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds)) return "00:00.0";
@@ -78,7 +55,7 @@ export const AudioWaveform = forwardRef<
   const waveSurferRef = useRef<WaveSurfer | null>(null);
   const regionsRef = useRef<ReturnType<typeof RegionsPlugin.create> | null>(null);
   const cyclesRef = useRef(cycles);
-  cyclesRef.current = cycles;
+  useEffect(() => { cyclesRef.current = cycles; }, [cycles]);
   const activeSegmentEndRef = useRef<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState(false);
@@ -102,7 +79,13 @@ export const AudioWaveform = forwardRef<
       url: audioUrl,
       height: compact ? 64 : 180,
       waveColor: "#8BA9C8",
-      progressColor: "#2F78C8",
+      progressColor: "#8BA9C8",
+      renderFunction: cycleWaveformRenderer(() => ({
+        segments: cyclesRef.current.map((c) => ({ start: c.start, end: c.end, label: legacyCycleLabel[c.classification] })),
+        duration: waveSurferRef.current?.getDuration() ?? expectedDuration,
+        width: waveSurferRef.current?.getWrapper().clientWidth ?? 0,
+        compact,
+      })),
       cursorColor: "#173A5E",
       cursorWidth: 1,
       barWidth: compact ? 1 : 2,
@@ -113,6 +96,7 @@ export const AudioWaveform = forwardRef<
       plugins: [regions, timeline],
     });
     waveSurferRef.current = waveSurfer;
+    waveSurfer.on("redrawcomplete", () => preserveCycleProgressColors(waveSurfer.getWrapper()));
 
     waveSurfer.on("ready", () => {
       setReady(true);
@@ -122,7 +106,7 @@ export const AudioWaveform = forwardRef<
           id: cycle.id,
           start: cycle.start,
           end: cycle.end,
-          color: cycleStyle[cycle.classification].region,
+          color: "transparent",
           drag: false,
           resize: false,
         }),
@@ -164,7 +148,11 @@ export const AudioWaveform = forwardRef<
       waveSurfer.destroy();
       waveSurferRef.current = null;
     };
-  }, [audioUrl, compact, onCyclePlaybackChange]);
+  }, [audioUrl, compact, expectedDuration, onCyclePlaybackChange]);
+
+  useEffect(() => {
+    if (ready) waveSurferRef.current?.setOptions({});
+  }, [cycles, ready]);
 
   useEffect(() => {
     if (!ready || !regionsRef.current) return;
@@ -172,10 +160,10 @@ export const AudioWaveform = forwardRef<
     cycles.forEach((cycle) => {
       const reg = currentRegions.find((r) => r.id === cycle.id);
       if (reg && reg.element) {
-        reg.element.style.backgroundColor = cycleStyle[cycle.classification].region;
+        styleCycleRegion(reg, cycle.number, legacyCycleLabel[cycle.classification], activeCycleId === cycle.id);
       }
     });
-  }, [cycles, ready]);
+  }, [cycles, ready, activeCycleId, compact]);
 
   const togglePlayback = () => {
     activeSegmentEndRef.current = null;
@@ -235,7 +223,7 @@ export const AudioWaveform = forwardRef<
             }`}
           >
             <span
-              className={`block truncate ${compact ? "text-[10px]" : "text-xs"} font-bold ${cycleStyle[cycle.classification].text}`}
+              className={`block truncate ${compact ? "text-[10px]" : "text-xs"} font-bold ${cycleLabelStyles[legacyCycleLabel[cycle.classification]].text}`}
             >
               {compact
                 ? `C${cycle.number}`
@@ -244,7 +232,7 @@ export const AudioWaveform = forwardRef<
             <span
               className={`block ${compact ? "text-[9px]" : "text-[11px] mt-0.5"} text-[#7894B3]`}
             >
-              {cycle.confidence}% · {cycle.start.toFixed(1)}–
+              {cycle.start.toFixed(1)}–
               {cycle.end.toFixed(1)}s
             </span>
           </button>
@@ -304,17 +292,5 @@ export const AudioWaveform = forwardRef<
 });
 
 export function WaveformLegend() {
-  return (
-    <div className="flex flex-wrap gap-4 text-xs">
-      {Object.entries(cycleStyle).map(([label, style]) => (
-        <span key={label} className="flex items-center gap-1.5 text-[#5A7799]">
-          <i
-            className="h-2.5 w-2.5 rounded-full"
-            style={{ backgroundColor: style.solid }}
-          />
-          {label === "Crackles + Wheezes" ? "Both" : label}
-        </span>
-      ))}
-    </div>
-  );
+  return <LungSoundLegend />;
 }

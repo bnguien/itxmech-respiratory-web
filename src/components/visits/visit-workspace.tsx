@@ -497,9 +497,6 @@ export function VisitWorkspace({ patient }: { patient: Patient }) {
                             ) : (
                               <div className="flex min-h-11 items-center whitespace-nowrap">
                                 <SoundLabel value={classes[index]} />
-                                <small className="ml-2 text-[#9EC9F3]">
-                                  ({cycle.confidence}%)
-                                </small>
                               </div>
                             )}
                           </div>

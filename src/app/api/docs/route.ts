@@ -41,6 +41,15 @@ function getSwaggerHtml() {
 export const dynamic = "force-static";
 
 export function GET() {
+  if (process.env.ENABLE_API_DOCS !== "true") {
+    return new Response("Not Found", {
+      status: 404,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   return new Response(getSwaggerHtml(), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",

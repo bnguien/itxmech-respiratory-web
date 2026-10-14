@@ -294,7 +294,7 @@ export const alerts: ClinicalAlert[] = [
     patientName: "Trần Văn Mạnh",
     patientCode: "PAT-001",
     type: "sound",
-    message: "AI phát hiện Crackles + Wheezes với độ tin cậy 92%",
+    message: "AI phát hiện Crackles + Wheezes",
     time: "12 phút trước",
     severity: "warning",
     unread: true,

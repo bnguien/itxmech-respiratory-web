@@ -19,6 +19,8 @@ import { spo2DataByRange } from "@/constants/spo2";
 import { Spo2Monitor } from "./spo2-monitor";
 import { VisitHistory } from "./visit-history";
 import { PatientRecordingsList } from "@/components/recordings/patient-recordings-list";
+import { CycleLabelBadge, SoundLabel } from "@/components/ui/status-badge";
+import { legacyCycleLabel } from "@/lib/recordings/presentation";
 
 type Spo2Range = "24h" | "7d" | "30d";
 const spo2Ranges: Array<{ id: Spo2Range; label: string }> = [
@@ -292,14 +294,9 @@ export function PatientDetail({
               <span className="text-xs uppercase tracking-wide text-[#5A7799]">
                 Âm phổi AI
               </span>
-              <p className="mt-1 font-extrabold text-[#EF4444]">
-                {hasClinicalData ? patient.sound : "Chưa có dữ liệu"}
+              <p className="mt-1 font-extrabold text-[#5A7799]">
+                {hasClinicalData ? <SoundLabel value={patient.sound} /> : "Chưa có dữ liệu"}
               </p>
-              {hasClinicalData && (
-                <small className="text-[#8BBCEC]">
-                  ({patient.confidence}%)
-                </small>
-              )}
             </div>
           </div>
           {!isArchived && <Link
@@ -386,16 +383,9 @@ export function PatientDetail({
                       Ghi nhận lúc {latest.recordedAt}
                     </p>
                   </div>
-                  <span className="rounded-xl bg-[#FFF0F1] px-4 py-2 text-sm font-bold text-[#EF4444]">
-                    {latest.classification}
-                  </span>
+                  <CycleLabelBadge value={legacyCycleLabel[latest.classification]} />
                 </div>
                 <div className="my-6 flex flex-wrap gap-x-8 gap-y-2 text-sm text-[#5A7799]">
-                  <span>
-                    Độ tin cậy:{" "}
-                    <b className="text-[#173A5E]">{latest.confidence}%</b>
-                  </span>
-                  <span>·</span>
                   <span>
                     Thời lượng:{" "}
                     <b className="text-[#173A5E]">{latest.duration}s</b>

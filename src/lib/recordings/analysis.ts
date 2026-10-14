@@ -1,7 +1,8 @@
 import "server-only";
 import { and, asc, eq, sql } from "drizzle-orm";
+import { after } from "next/server";
 import { db } from "@/lib/db";
-import { recordings } from "@/lib/db/schema/recordings";
+import { recordings, type RecordingRow } from "@/lib/db/schema/recordings";
 import { respiratoryCycles } from "@/lib/db/schema/respiratory-cycles";
 import { createSupabaseAdminClient, getLungRecordingsBucket } from "@/lib/supabase/admin";
 import { serializeRecording, SIGNED_URL_EXPIRY_SECONDS } from "./server";
@@ -38,18 +39,45 @@ export async function getRecordingAnalysis(recordingId: string) {
   }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
-export async function analyzeRecording(recordingId: string) {
-  // Five-minute lease allows recovery after a crashed request, without a long HTTP transaction.
-  const recording = await db.transaction(async (tx) => {
+async function claimAnalysis(recordingId: string, retryFailed: boolean) {
+  // Serialize the decision before any signed URL or AI request is created.
+  return db.transaction(async (tx) => {
     const [row] = await tx.select().from(recordings).where(eq(recordings.id, recordingId)).for("update");
     if (!row) throw notFound();
+    // Completed results are immutable, including a successful empty cycle list.
+    // Analyzing is never reclaimed by a second HTTP request, regardless of age.
+    if (row.analysisStatus === "completed" || row.analysisStatus === "analyzing") return null;
+    if (!retryFailed && row.analysisStatus === "failed") return null;
     if (row.uploadStatus !== "uploaded") throw new AnalysisError(409, "RECORDING_NOT_READY", "Bản ghi âm chưa được tải lên.");
-    if (row.analysisStatus === "analyzing" && row.analysisStartedAt && Date.now() - Date.parse(row.analysisStartedAt) < 300_000) {
-      throw new AnalysisError(409, "ANALYSIS_IN_PROGRESS", "Bản ghi âm đang được phân tích.");
-    }
     const [claimed] = await tx.update(recordings).set({ analysisStatus: "analyzing", analysisStartedAt: new Date().toISOString(), analysisError: null, updatedAt: new Date().toISOString() }).where(eq(recordings.id, recordingId)).returning();
     return claimed;
   });
+}
+
+export async function analyzeRecording(recordingId: string) {
+  const recording = await claimAnalysis(recordingId, true);
+  return recording ? runAnalysis(recording) : getRecordingAnalysis(recordingId);
+}
+
+export async function analyzeUploadedRecording(recordingId: string) {
+  // Claim before returning the upload response, so the next GET sees analyzing.
+  // Device retries do not become implicit retries of failed AI requests.
+  const recording = await claimAnalysis(recordingId, false);
+  if (!recording) return;
+  after(async () => {
+    try {
+      await runAnalysis(recording);
+    } catch (error) {
+      // The service has already persisted failed. Upload remains successful.
+      console.error("[Recording API] Automatic analysis failed", {
+        code: error instanceof AnalysisError ? error.code : "INTERNAL_ERROR",
+      });
+    }
+  });
+}
+
+async function runAnalysis(recording: RecordingRow) {
+  const recordingId = recording.id;
   const ownsLease = and(eq(recordings.id, recordingId), eq(recordings.analysisStartedAt, recording.analysisStartedAt!));
   try {
     const { data, error } = await createSupabaseAdminClient().storage.from(getLungRecordingsBucket()).createSignedUrl(recording.storagePath, SIGNED_URL_EXPIRY_SECONDS);
