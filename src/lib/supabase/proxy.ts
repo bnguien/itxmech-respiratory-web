@@ -11,15 +11,15 @@ const protectedPagePrefixes = [
   "/settings",
 ];
 
-const publicApiRoutes = new Set([
-  "/api/docs",
-  "/api/openapi.json",
-  "/api/health",
-]);
+const apiDocsRoutes = new Set(["/api/docs", "/api/openapi.json"]);
 
-// Patient/recording handlers authenticate doctors themselves. Device handlers
-// exclusively validate X-Device-Key and must not require a Supabase session.
-const selfAuthenticatedApiPrefixes = ["/api/patients", "/api/recordings", "/api/device"];
+const publicApiRoutes = new Set(["/api/health"]);
+
+const selfAuthenticatedApiPrefixes = [
+  "/api/patients",
+  "/api/recordings",
+  "/api/device",
+];
 
 function isProtectedPage(pathname: string) {
   return protectedPagePrefixes.some(
@@ -27,46 +27,75 @@ function isProtectedPage(pathname: string) {
   );
 }
 
+function isApiDocsRoute(pathname: string) {
+  return apiDocsRoutes.has(
+    pathname.endsWith("/") && pathname !== "/"
+      ? pathname.slice(0, -1)
+      : pathname,
+  );
+}
+
 function safeNextPath(request: NextRequest) {
   const path = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+
   return path.startsWith("/") && !path.startsWith("//") ? path : "/dashboard";
 }
 
 function redirectWithSession(url: URL, sessionResponse: NextResponse) {
   const redirectResponse = NextResponse.redirect(url);
-  sessionResponse.cookies.getAll().forEach((cookie) =>
-    redirectResponse.cookies.set(cookie),
-  );
+
+  sessionResponse.cookies
+    .getAll()
+    .forEach((cookie) => redirectResponse.cookies.set(cookie));
+
   return redirectResponse;
 }
 
 export async function updateSession(request: NextRequest) {
-  if (publicApiRoutes.has(request.nextUrl.pathname)) {
+  const { pathname } = request.nextUrl;
+
+  if (isApiDocsRoute(pathname)) {
+    if (process.env.ENABLE_API_DOCS !== "true") {
+      return new NextResponse("Not Found", {
+        status: 404,
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
+    return NextResponse.next({ request });
+  }
+
+  if (publicApiRoutes.has(pathname)) {
     return NextResponse.next({ request });
   }
 
   if (
     selfAuthenticatedApiPrefixes.some(
-      (prefix) =>
-        request.nextUrl.pathname === prefix ||
-        request.nextUrl.pathname.startsWith(`${prefix}/`),
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
     )
   ) {
     return NextResponse.next({ request });
   }
 
   let response = NextResponse.next({ request });
+
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
+
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
+
           response = NextResponse.next({ request });
+
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
           );
@@ -78,19 +107,25 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { pathname } = request.nextUrl;
+
   const isApiRoute = pathname.startsWith("/api/");
 
   if (!user && isApiRoute) {
     return NextResponse.json(
-      { error: "Bạn cần đăng nhập để thực hiện yêu cầu này." },
-      { status: 401 },
+      {
+        error: "Bạn cần đăng nhập để thực hiện yêu cầu này.",
+      },
+      {
+        status: 401,
+      },
     );
   }
 
   if (!user && isProtectedPage(pathname)) {
     const loginUrl = new URL("/login", request.url);
+
     loginUrl.searchParams.set("next", safeNextPath(request));
+
     return redirectWithSession(loginUrl, response);
   }
 

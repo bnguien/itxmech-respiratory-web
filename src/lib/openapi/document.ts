@@ -12,12 +12,8 @@ export const openApiDocument = {
   },
   servers: [
     {
-      url: "http://localhost:3000",
-      description: "Local development",
-    },
-    {
-      url: "https://your-production-domain.example",
-      description: "Production placeholder — replace with the deployed domain",
+      url: "/",
+      description: "Current server",
     },
   ],
   tags: [
@@ -53,7 +49,8 @@ export const openApiDocument = {
         type: "apiKey",
         in: "header",
         name: "X-Device-Key",
-        description: "Firmware device credential. Never place a real key in shared documentation.",
+        description:
+          "Firmware device credential. Never place a real key in shared documentation.",
       },
     },
     schemas: openApiSchemas,
