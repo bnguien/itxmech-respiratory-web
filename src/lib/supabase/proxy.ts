@@ -18,6 +18,7 @@ const publicApiRoutes = new Set(["/api/health"]);
 const selfAuthenticatedApiPrefixes = [
   "/api/patients",
   "/api/recordings",
+  "/api/visits",
   "/api/device",
 ];
 
