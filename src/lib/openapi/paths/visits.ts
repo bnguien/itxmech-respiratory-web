@@ -13,6 +13,33 @@ const commonErrors = {
 };
 
 export const visitPaths = {
+  "/api/visits/{visitId}/devices/stethoscope/assign": {
+    post: {
+      tags: ["Visits", "Devices"],
+      summary: "Gửi lệnh gán ống nghe cho lần khám",
+      description: "Chỉ bác sĩ phụ trách được gửi lệnh cho Visit in_progress. HTTP 202 xác nhận Gateway đã nhận lệnh, không xác nhận thiết bị đã áp dụng.",
+      operationId: "assignStethoscopeVisit",
+      security,
+      parameters: [visitId],
+      responses: {
+        "202": {
+          description: "Gateway đã nhận yêu cầu gán.",
+          content: { "application/json": { schema: {
+            type: "object",
+            properties: { data: { type: "object", properties: {
+              device_id: { type: "string", example: "RESPICARE-STETH-001" },
+              visit_id: { type: "string", format: "uuid" },
+              status: { type: "string", example: "requested" },
+            } } },
+          } } },
+        },
+        "502": { $ref: "#/components/responses/InternalError" },
+        "503": { $ref: "#/components/responses/InternalError" },
+        "504": { $ref: "#/components/responses/InternalError" },
+        ...commonErrors,
+      },
+    },
+  },
   "/api/patients/{id}/visits": {
     get: {
       tags: ["Visits"],
