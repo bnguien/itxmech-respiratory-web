@@ -10,49 +10,102 @@ import type { ApiError } from "@/types/visit";
 export function VisitRecordingPanel({
   patientId,
   visitId,
+  canAssign,
 }: {
   patientId: string;
   visitId: string;
+  canAssign: boolean;
 }) {
-  return <VisitRecordingContent key={`${patientId}:${visitId}`} patientId={patientId} visitId={visitId} />;
+  return (
+    <VisitRecordingContent
+      key={`${patientId}:${visitId}`}
+      patientId={patientId}
+      visitId={visitId}
+      canAssign={canAssign}
+    />
+  );
 }
 
-function VisitRecordingContent({ patientId, visitId }: { patientId: string; visitId: string }) {
+function VisitRecordingContent({
+  patientId,
+  visitId,
+  canAssign,
+}: {
+  patientId: string;
+  visitId: string;
+  canAssign: boolean;
+}) {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [assigning, setAssigning] = useState(false);
+  const [requested, setRequested] = useState(false);
+  const [assignError, setAssignError] = useState("");
   const realtime = useRecordingRealtime("visit_id", visitId);
+
+  async function assign() {
+    if (assigning || requested || !canAssign || loading || recording) return;
+    setAssigning(true);
+    setAssignError("");
+    try {
+      const response = await fetch(
+        `/api/visits/${visitId}/devices/stethoscope/assign`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as {
+        data?: { status?: string };
+        error?: { message?: string };
+      } | null;
+      if (!response.ok || payload?.data?.status !== "requested") {
+        setAssignError(
+          payload?.error?.message ||
+            "Không thể gửi lệnh ghi âm. Vui lòng thử lại.",
+        );
+        return;
+      }
+      setRequested(true);
+    } catch {
+      setAssignError("Không thể gửi lệnh ghi âm. Vui lòng thử lại.");
+    } finally {
+      setAssigning(false);
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
-    try {
-      const response = await fetch(
-        `/api/patients/${patientId}/visits/${visitId}/recording`,
-        { cache: "no-store", signal: controller.signal },
-      );
-      if (controller.signal.aborted) return;
-      if (response.status === 404) {
-        setRecording(null);
-        setError("");
-        return;
-      }
-      const payload = (await response.json()) as { data: Recording } | ApiError;
-      if (controller.signal.aborted) return;
-      if (!response.ok || !("data" in payload)) {
-        setError(
-          (payload as ApiError).error?.message || "Không thể tải bản ghi âm.",
+      try {
+        const response = await fetch(
+          `/api/patients/${patientId}/visits/${visitId}/recording`,
+          { cache: "no-store", signal: controller.signal },
         );
-        return;
+        if (controller.signal.aborted) return;
+        if (response.status === 404) {
+          setRecording(null);
+          setError("");
+          return;
+        }
+        const payload = (await response.json()) as
+          | { data: Recording }
+          | ApiError;
+        if (controller.signal.aborted) return;
+        if (!response.ok || !("data" in payload)) {
+          setError(
+            (payload as ApiError).error?.message || "Không thể tải bản ghi âm.",
+          );
+          return;
+        }
+        setRecording(payload.data);
+        setError("");
+      } catch {
+        if (!controller.signal.aborted) setError("Không thể tải bản ghi âm.");
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
       }
-      setRecording(payload.data);
-      setError("");
-    } catch {
-      if (!controller.signal.aborted) setError("Không thể tải bản ghi âm.");
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
     }
     void load();
     return () => controller.abort();
@@ -60,19 +113,58 @@ function VisitRecordingContent({ patientId, visitId }: { patientId: string; visi
 
   return (
     <section className="rounded-[22px] border border-[#DFEAF5] bg-white p-6 shadow-[0_2px_5px_rgba(23,58,94,0.08)] sm:p-8">
-      <div className="flex items-center gap-4">
-        <span className="flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#E7F2FC] text-[#2F78C8]">
-          <Stethoscope size={25} />
-        </span>
-        <div>
-          <h2 className="text-[18px] font-extrabold text-[#173A5E]">Âm phổi</h2>
-          <p className="text-[14px] text-[#6F89A8]">
-            Bản ghi WAV được đồng bộ từ ống nghe điện tử
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <span className="flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#E7F2FC] text-[#2F78C8]">
+            <Stethoscope size={25} />
+          </span>
+          <div>
+            <h2 className="text-[18px] font-extrabold text-[#173A5E]">
+              Âm phổi
+            </h2>
+            <p className="text-[14px] text-[#6F89A8]">
+              Bản ghi WAV được đồng bộ từ ống nghe điện tử
+            </p>
+          </div>
         </div>
+        {canAssign && !loading && !recording && (
+          <button
+            type="button"
+            className="btn-primary disabled:opacity-50"
+            disabled={assigning || requested}
+            onClick={() => void assign()}
+          >
+            {assigning
+              ? "Đang gửi lệnh..."
+              : requested
+                ? "Đã gửi yêu cầu ghi âm"
+                : "Bắt đầu ghi âm bằng ống nghe"}
+          </button>
+        )}
       </div>
+      {assignError && (
+        <p role="alert" className="mt-4 text-sm text-red-600">
+          {assignError}
+        </p>
+      )}
+      {requested && (
+        <p role="status" className="mt-4 text-sm text-[#5A7799]">
+          Đã gửi yêu cầu tới gateway; chờ thiết bị nhận lệnh và tải bản ghi lên.
+        </p>
+      )}
       <div className="mt-7 rounded-[18px] border border-[#CFE4F8] bg-[#FCFEFF] p-6">
-        {(realtime.error || error) && <div className="mb-4 text-sm text-red-600"><p role="alert">{realtime.error || error}</p><button type="button" className="btn-secondary mt-2" onClick={() => setRefresh((value) => value + 1)}>Tải lại kết quả</button></div>}
+        {(realtime.error || error) && (
+          <div className="mb-4 text-sm text-red-600">
+            <p role="alert">{realtime.error || error}</p>
+            <button
+              type="button"
+              className="btn-secondary mt-2"
+              onClick={() => setRefresh((value) => value + 1)}
+            >
+              Tải lại kết quả
+            </button>
+          </div>
+        )}
         {loading && (
           <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-[#6F89A8]">
             <LoaderCircle size={18} className="animate-spin" />
@@ -105,7 +197,11 @@ function VisitRecordingContent({ patientId, visitId }: { patientId: string; visi
           </div>
         )}
         {!loading && !error && recording?.upload_status === "uploaded" && (
-          <VisitRecordingAnalysis key={recording.id} recording={recording} reviewHref={`/recordings/${recording.id}?from=visit&patientId=${patientId}&visitId=${visitId}`} />
+          <VisitRecordingAnalysis
+            key={recording.id}
+            recording={recording}
+            reviewHref={`/recordings/${recording.id}?from=visit&patientId=${patientId}&visitId=${visitId}`}
+          />
         )}
       </div>
     </section>
