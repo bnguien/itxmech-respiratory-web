@@ -436,7 +436,11 @@ export function VisitDetail({
       </header>
 
       <div className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,2.08fr)_minmax(350px,1fr)]">
-        <VisitClinicalPanels patientId={patientId} visitId={visitId} />
+        <VisitClinicalPanels
+          patientId={patientId}
+          visitId={visitId}
+          canAssign={visit?.status === "in_progress"}
+        />
 
         <section className="rounded-[22px] border border-[#DFEAF5] bg-white p-7 shadow-[0_2px_5px_rgba(23,58,94,0.08)] sm:p-8">
           <h2 className="text-[18px] font-extrabold text-[#173A5E]">
@@ -613,9 +617,11 @@ function Modal({
 function VisitClinicalPanels({
   patientId,
   visitId,
+  canAssign,
 }: {
   patientId: string;
   visitId: string;
+  canAssign: boolean;
 }) {
   const trend = [89, 90, 89, 90, 89, 89];
   return (
@@ -669,7 +675,11 @@ function VisitClinicalPanels({
         </div>
       </section>
 
-      <VisitRecordingPanel patientId={patientId} visitId={visitId} />
+      <VisitRecordingPanel
+        patientId={patientId}
+        visitId={visitId}
+        canAssign={canAssign}
+      />
     </div>
   );
 }
