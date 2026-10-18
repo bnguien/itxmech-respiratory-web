@@ -6,7 +6,7 @@ import { patients, recordings } from "@/constants/mock-data";
 import { SoundLabel } from "@/components/ui/status-badge";
 import { Spo2Chart } from "./spo2-chart";
 import { StartVisitModal } from "@/components/visits/start-visit-modal";
-import { spo2DataByRange } from "@/constants/spo2";
+import { mockMonitoringConfig, spo2DataByRange } from "@/constants/spo2";
 
 export function DashboardView() {
   const [open, setOpen] = useState(false);
@@ -276,11 +276,11 @@ export function DashboardView() {
               </p>
             </div>
             <span className="text-xs text-[#2F78C8]">
-              — SpO₂ (%) &nbsp; <i className="text-red-500">-- Ngưỡng 90%</i>
+              — SpO₂ (%) &nbsp; <i className="text-red-500">-- Ngưỡng T {mockMonitoringConfig.T}%</i>
             </span>
           </div>
           <div className="mt-6">
-            <Spo2Chart data={spo2DataByRange[spo2Range]} />
+            <Spo2Chart data={spo2DataByRange[spo2Range]} threshold={mockMonitoringConfig.T} />
           </div>
         </section>
       </div>

@@ -10,16 +10,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  SPO2_WARNING_THRESHOLD,
-  getSpo2StatusLabel,
-  spo2DataByRange,
-  type Spo2ChartPoint,
-} from "@/constants/spo2";
+import { getSpo2StatusLabel, spo2DataByRange, type Spo2ChartPoint } from "@/constants/spo2";
+import { DEFAULT_SPO2_T } from "@/lib/wearable/presentation";
 
 interface Spo2ChartProps {
   compact?: boolean;
   data?: Spo2ChartPoint[];
+  /** Ngưỡng T bác sĩ đặt cho bệnh nhân (config.v1). */
+  threshold?: number;
+  /** Ngưỡng Critical của luật (crit_T). */
+  criticalThreshold?: number;
 }
 
 function PointDot({
@@ -31,15 +31,15 @@ function PointDot({
   cy?: number;
   payload?: Spo2ChartPoint;
 }) {
-  const abnormal = payload ? payload.value < SPO2_WARNING_THRESHOLD : false;
+  const abnormal = payload?.status === "warning";
   return (
     <circle
       cx={cx}
       cy={cy}
-      r={abnormal ? 5 : 3.5}
+      r={abnormal ? 4.5 : 2}
       fill={abnormal ? "#EF4444" : "#2F78C8"}
       stroke="#fff"
-      strokeWidth={2}
+      strokeWidth={abnormal ? 2 : 1}
     />
   );
 }
@@ -47,7 +47,11 @@ function PointDot({
 export function Spo2Chart({
   compact = false,
   data = spo2DataByRange["24h"],
+  threshold = DEFAULT_SPO2_T,
+  criticalThreshold,
 }: Spo2ChartProps) {
+  const lowest = Math.min(...data.map((point) => point.min ?? point.value));
+  const floor = Math.max(70, Math.min(84, Math.floor((lowest - 2) / 2) * 2));
   return (
     <div className={compact ? "h-64 w-full" : "h-[340px] w-full"}>
       <ResponsiveContainer width="100%" height="100%">
@@ -65,11 +69,11 @@ export function Spo2Chart({
             tick={{ fill: "#6E89A8", fontSize: 11 }}
             tickLine={false}
             axisLine={{ stroke: "#D7E4F1" }}
+            minTickGap={24}
             dy={8}
           />
           <YAxis
-            domain={[85, 100]}
-            ticks={[85, 90, 95, 100]}
+            domain={[floor, 100]}
             width={42}
             tick={{ fill: "#6E89A8", fontSize: 11 }}
             tickLine={false}
@@ -84,19 +88,34 @@ export function Spo2Chart({
               borderRadius: 12,
               boxShadow: "0 8px 24px rgba(23,58,94,.08)",
             }}
-            formatter={(value) => [
-              `${Number(value)}% · ${getSpo2StatusLabel(Number(value))}`,
-              "SpO₂",
-            ]}
+            formatter={(value, name) =>
+              name === "min"
+                ? [`${Number(value)}% · ${getSpo2StatusLabel(Number(value), threshold)}`, "Thấp nhất"]
+                : [`${Number(value)}%`, "Trung bình"]
+            }
             labelFormatter={(label) => `Thời gian: ${label}`}
           />
+          {criticalThreshold !== undefined && (
+            <ReferenceLine
+              y={criticalThreshold}
+              stroke="#B91C1C"
+              strokeDasharray="2 4"
+              strokeWidth={1.2}
+              label={{
+                value: `Nguy hiểm ${criticalThreshold}%`,
+                fill: "#B91C1C",
+                fontSize: 10,
+                position: "insideBottomRight",
+              }}
+            />
+          )}
           <ReferenceLine
-            y={SPO2_WARNING_THRESHOLD}
+            y={threshold}
             stroke="#EF4444"
             strokeDasharray="6 6"
             strokeWidth={1.5}
             label={{
-              value: `Ngưỡng ${SPO2_WARNING_THRESHOLD}%`,
+              value: `Ngưỡng T ${threshold}%`,
               fill: "#EF4444",
               fontSize: 10,
               position: "insideTopRight",
@@ -104,8 +123,18 @@ export function Spo2Chart({
           />
           <Line
             type="monotone"
+            dataKey="min"
+            name="min"
+            stroke="#9EC9F3"
+            strokeWidth={1.2}
+            strokeDasharray="4 3"
+            dot={false}
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
             dataKey="value"
-            name="SpO₂"
+            name="value"
             stroke="#2F78C8"
             strokeWidth={2.5}
             dot={<PointDot />}
