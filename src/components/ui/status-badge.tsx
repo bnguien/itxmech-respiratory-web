@@ -1,6 +1,8 @@
 import type { LungSound } from "@/types/clinical";
 import type { CycleLabel, CycleReviewStatus } from "@/types/analysis";
+import type { WearableLevel } from "@/types/wearable";
 import { cycleLabels, cycleLabelStyles, cycleReviewStyles, legacyCycleLabel } from "@/lib/recordings/presentation";
+import { wearableLevelStyles } from "@/lib/wearable/presentation";
 
 export function CycleLabelBadge({ value }: { value: CycleLabel | null }) {
   const style = value ? cycleLabelStyles[value] : null;
@@ -18,6 +20,11 @@ export function LungSoundLegend() {
 export function CycleReviewBadge({ status }: { status: CycleReviewStatus }) {
   const style = cycleReviewStyles[status];
   return <span className={`inline-flex rounded-md px-2.5 py-1 text-[11px] font-bold ${style.badge}`}>{style.name}</span>;
+}
+
+export function WearableLevelBadge({ level }: { level: WearableLevel }) {
+  const style = wearableLevelStyles[level];
+  return <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${style.badge}`}><i aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: style.solid }} />{style.name}</span>;
 }
 
 export function SoundLabel({ value }: { value: LungSound }) {

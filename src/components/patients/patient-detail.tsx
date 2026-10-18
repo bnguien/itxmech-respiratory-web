@@ -15,7 +15,8 @@ import {
 import type { Patient, Recording } from "@/types/clinical";
 import { Spo2Chart } from "@/components/dashboard/spo2-chart";
 import { AudioWaveform } from "@/components/recordings/audio-waveform";
-import { spo2DataByRange } from "@/constants/spo2";
+import { mockAssessments, mockMonitoringConfig, spo2DataByRange } from "@/constants/spo2";
+import { assessmentTriggerLabels, formatClock, formatSpo2, wearableLevelStyles } from "@/lib/wearable/presentation";
 import { Spo2Monitor } from "./spo2-monitor";
 import { VisitHistory } from "./visit-history";
 import { PatientRecordingsList } from "@/components/recordings/patient-recordings-list";
@@ -87,6 +88,11 @@ export function PatientDetail({
   );
   const [spo2Range, setSpo2Range] = useState<Spo2Range>("24h");
   const currentSpo2Data = spo2DataByRange[spo2Range];
+  const latestAssessment = mockAssessments.at(-1);
+  const latestNotified = mockAssessments.findLast(
+    (item) => item.notify.watch || item.notify.alert || item.notify.critical,
+  );
+  const latestLevelStyle = wearableLevelStyles[latestAssessment?.level ?? "UNKNOWN"];
 
   const [notes, setNotes] = useState<PatientNote[]>(() => {
     const initialNotes: PatientNote[] = patient.initialSymptoms
@@ -283,10 +289,10 @@ export function PatientDetail({
               <span className="text-xs uppercase tracking-wide text-[#5A7799]">
                 SpO₂ hiện tại
               </span>
-              <p className="mt-1 text-4xl font-extrabold text-[#EF4444]">
-                {hasClinicalData ? `${patient.spo2}%` : "—"}{" "}
+              <p className={`mt-1 text-4xl font-extrabold ${hasClinicalData ? latestLevelStyle.text : "text-[#5A7799]"}`}>
+                {hasClinicalData ? formatSpo2(latestAssessment?.spo2_now ?? null) : "—"}{" "}
                 <small className="text-sm">
-                  {hasClinicalData ? "Thấp" : "Chưa có dữ liệu"}
+                  {hasClinicalData ? latestLevelStyle.name : "Chưa có dữ liệu"}
                 </small>
               </p>
             </div>
@@ -350,7 +356,11 @@ export function PatientDetail({
                 </div>
               </div>
               <div className="mt-12">
-                <Spo2Chart data={currentSpo2Data} />
+                <Spo2Chart
+                  data={currentSpo2Data}
+                  threshold={mockMonitoringConfig.T}
+                  criticalThreshold={mockMonitoringConfig.critical.crit_T}
+                />
               </div>
               <div className="mt-4 grid grid-cols-3 border-t border-[#E1ECF7] pt-5 text-center">
                 <div>
@@ -546,14 +556,19 @@ export function PatientDetail({
             </section>
             <section className="card p-7">
               <h2 className="font-extrabold uppercase">Cảnh báo gần nhất</h2>
-              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50/60 p-5">
-                <p className="font-semibold text-[#EF4444]">
-                  ●&nbsp; SpO₂ giảm xuống {patient.spo2}%
-                </p>
-                <small className="ml-6 mt-1 block text-[#9EC9F3]">
-                  5 phút trước
-                </small>
-              </div>
+              {latestNotified ? (
+                <div className={`mt-5 rounded-2xl border p-5 ${wearableLevelStyles[latestNotified.level].badge}`}>
+                  <p className="font-semibold">
+                    ●&nbsp; {wearableLevelStyles[latestNotified.level].name}:{" "}
+                    {assessmentTriggerLabels[latestNotified.trigger]}
+                  </p>
+                  <small className="ml-6 mt-1 block">
+                    SpO₂ {formatSpo2(latestNotified.spo2_now)} · {formatClock(latestNotified.ts)}
+                  </small>
+                </div>
+              ) : (
+                <p className="mt-5 text-sm text-[#5A7799]">Chưa có cảnh báo từ vòng đeo tay.</p>
+              )}
             </section>
           </aside>
         </div>
