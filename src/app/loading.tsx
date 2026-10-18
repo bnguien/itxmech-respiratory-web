@@ -18,7 +18,7 @@ export default function Loading() {
             ITXMECH
           </span>
           <h1 className="text-xl font-extrabold tracking-tight text-[#173A5E] sm:text-2xl">
-            Respiratory<span className="text-[#2F78C8]">Care</span>
+            Respi<span className="text-[#2F78C8]">Care</span>
           </h1>
           <p className="text-xs font-medium text-[#5A7799]">
             Hệ thống AIoT Hô hấp
