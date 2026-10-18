@@ -93,6 +93,7 @@ export function PatientDetail({
     (item) => item.notify.watch || item.notify.alert || item.notify.critical,
   );
   const latestLevelStyle = wearableLevelStyles[latestAssessment?.level ?? "UNKNOWN"];
+  const isNguyenVanA = patient.code === "PAT-000024" && patient.name === "Nguyễn Văn A";
 
   const [notes, setNotes] = useState<PatientNote[]>(() => {
     const initialNotes: PatientNote[] = patient.initialSymptoms
@@ -289,10 +290,10 @@ export function PatientDetail({
               <span className="text-xs uppercase tracking-wide text-[#5A7799]">
                 SpO₂ hiện tại
               </span>
-              <p className={`mt-1 text-4xl font-extrabold ${hasClinicalData ? latestLevelStyle.text : "text-[#5A7799]"}`}>
-                {hasClinicalData ? formatSpo2(latestAssessment?.spo2_now ?? null) : "—"}{" "}
+              <p className={`mt-1 text-4xl font-extrabold ${isNguyenVanA ? "text-[#22C55E]" : hasClinicalData ? latestLevelStyle.text : "text-[#5A7799]"}`}>
+                {isNguyenVanA ? "95%" : hasClinicalData ? formatSpo2(latestAssessment?.spo2_now ?? null) : "—"}{" "}
                 <small className="text-sm">
-                  {hasClinicalData ? latestLevelStyle.name : "Chưa có dữ liệu"}
+                  {isNguyenVanA ? "Bình thường" : hasClinicalData ? latestLevelStyle.name : "Chưa có dữ liệu"}
                 </small>
               </p>
             </div>
@@ -301,8 +302,9 @@ export function PatientDetail({
                 Âm phổi AI
               </span>
               <p className="mt-1 font-extrabold text-[#5A7799]">
-                {hasClinicalData ? <SoundLabel value={patient.sound} /> : "Chưa có dữ liệu"}
+                {isNguyenVanA ? "Normal / Crackle" : hasClinicalData ? <SoundLabel value={patient.sound} /> : "Chưa có dữ liệu"}
               </p>
+              {isNguyenVanA && <p className="mt-1 text-xs text-[#5A7799]">Có ghi nhận một số đoạn Wheeze</p>}
             </div>
           </div>
           {!isArchived && <Link

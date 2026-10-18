@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { RecordingWaveform } from "./recording-waveform";
+import { PatientRecordingWaveform } from "./patient-recording-waveform";
 import type { PaginatedRecordingsResponse } from "@/types/recording";
 import type { ApiError } from "@/types/visit";
 
@@ -100,7 +100,7 @@ export function PatientRecordingsList({ patientId }: { patientId: string }) {
                 </div>
               </div>
               {recording.upload_status === "uploaded" && (
-                <RecordingWaveform recordingId={recording.id} />
+                 <PatientRecordingWaveform recordingId={recording.id} />
               )}
             </article>
           ))}
