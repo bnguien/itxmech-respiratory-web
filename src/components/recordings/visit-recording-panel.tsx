@@ -41,6 +41,8 @@ function VisitRecordingContent({
   const [refresh, setRefresh] = useState(0);
   const [assigning, setAssigning] = useState(false);
   const [requested, setRequested] = useState(false);
+  const [requestedAt, setRequestedAt] = useState<number | null>(null);
+  const [progress, setProgress] = useState(0);
   const [assignError, setAssignError] = useState("");
   const realtime = useRecordingRealtime("visit_id", visitId);
 
@@ -68,12 +70,23 @@ function VisitRecordingContent({
         return;
       }
       setRequested(true);
+      setRequestedAt(Date.now());
     } catch {
       setAssignError("Không thể gửi lệnh ghi âm. Vui lòng thử lại.");
     } finally {
       setAssigning(false);
     }
   }
+
+  useEffect(() => {
+    if (requestedAt === null || recording?.upload_status === "uploaded" || recording?.upload_status === "failed") return;
+    const update = () => setProgress(Math.min(95, Math.floor((Date.now() - requestedAt) / 1000 / 20 * 95)));
+    const timer = window.setInterval(update, 500);
+    return () => window.clearInterval(timer);
+  }, [requestedAt, recording?.upload_status]);
+
+  const showProgress = requested || recording?.upload_status === "waiting_upload";
+  const displayedProgress = recording?.upload_status === "uploaded" ? 100 : progress;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -147,10 +160,17 @@ function VisitRecordingContent({
           {assignError}
         </p>
       )}
-      {requested && (
-        <p role="status" className="mt-4 text-sm text-[#5A7799]">
-          Đã gửi yêu cầu tới gateway; chờ thiết bị nhận lệnh và tải bản ghi lên.
-        </p>
+      {showProgress && recording?.upload_status !== "failed" && (
+        <div className="mt-4" role="progressbar" aria-label="Tiến độ ghi âm ước tính" aria-valuemin={0} aria-valuemax={100} aria-valuenow={displayedProgress}>
+          <div className="flex justify-between text-sm font-semibold text-[#173A5E]">
+            <span>{displayedProgress === 100 ? "Đã nhận bản ghi âm" : "Đang ghi âm và nhận bản ghi"}</span>
+            <span>{displayedProgress}%</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#E7F2FC]">
+            <div className="h-full rounded-full bg-[#2F78C8] transition-[width] duration-500" style={{ width: `${displayedProgress}%` }} />
+          </div>
+          {displayedProgress < 100 && <p className="mt-1 text-xs text-[#6F89A8]">Tiến độ ước tính; hoàn tất khi thiết bị gửi bản ghi.</p>}
+        </div>
       )}
       <div className="mt-7 rounded-[18px] border border-[#CFE4F8] bg-[#FCFEFF] p-6">
         {(realtime.error || error) && (
@@ -185,9 +205,6 @@ function VisitRecordingContent({
               <b className="mt-4 text-[#173A5E]">
                 Đang chờ bản ghi từ thiết bị
               </b>
-              <p className="mt-2 text-sm text-[#6F89A8]">
-                Trang sẽ tự cập nhật khi firmware upload hoàn tất.
-              </p>
             </div>
           )}
         {!loading && !error && recording?.upload_status === "failed" && (
