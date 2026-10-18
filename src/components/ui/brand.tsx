@@ -22,7 +22,7 @@ export function Brand({
               inverted ? "text-white" : "text-[#173A5E]"
             }`}
           >
-            Respiratory
+            Respi
             <span className={inverted ? "text-[#9EC9F3]" : "text-[#2F78C8]"}>
               Care
             </span>

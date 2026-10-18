@@ -172,7 +172,7 @@ export function RecordingAnalysis({ recordingId }: { recordingId: string }) {
       </Link>
       <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[#E7F1FB] pb-5">
         <div>
-          <p className="eyebrow">RespiratoryCare · Âm phổi</p>
+          <p className="eyebrow">RespiCare · Âm phổi</p>
           <h1 className="mt-2 page-title">
             Phân tích & đánh giá chu kỳ hô hấp
           </h1>
