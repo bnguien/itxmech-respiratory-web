@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
 import {
+  bleConfigHex,
   DEFAULT_THRESHOLDS,
   defaultStoredConfig,
   thresholdsInt8,
@@ -47,6 +48,15 @@ describe("config.v1 cho app", () => {
     expect(body).toMatchObject({ version: 3, T: 88, thr_q: { watch: 71, alert: 86 }, applied_on_device: false });
     expect(body.critical).toEqual({ crit_T: 85, n_min: 3, sqi_min: 0.5, hr_low: 40, hr_high: 140, cooldown: 30 });
     expect(toConfigV1(stored, { deviceId: null, assignmentId: null, appliedVersion: 3 }).applied_on_device).toBe(true);
+  });
+
+  it("ble_config_hex cho vòng chạy WiFi khớp gói CONFIG mẫu ở ble-gatt.md 3.7", () => {
+    // T = 88, version 9, HR 45–120: đúng 16 byte test firmware (tests/host/test_ble_proto.c) dùng.
+    const stored = { ...defaultStoredConfig(), version: 9, thresholds: { ...DEFAULT_THRESHOLDS, hr_low: 45, hr_high: 120 } };
+    expect(bleConfigHex(stored)).toBe("0900585503322d780147560101" + "3c0a1e");
+    // ML tắt: ngưỡng INT8 127 / 127 như app gửi khi không có ngưỡng model.
+    const noMl = { ...stored, version: 2, thresholds: { ...stored.thresholds, T: 90, hr_low: 40, hr_high: 140, ml_enabled: false } };
+    expect(bleConfigHex(noMl)).toBe("02005a550332288c007f7f01013c0a1e");
   });
 });
 

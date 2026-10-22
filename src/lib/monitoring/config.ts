@@ -133,6 +133,32 @@ export function toConfigV1(
   };
 }
 
+/**
+ * Gói CONFIG 16 byte (hex) đúng như app ghi xuống vòng qua BLE (BlePacketCodec.encodeConfig), để vòng chạy WiFi
+ * tự lấy ngưỡng qua `GET /device/config` và giải mã bằng chính hàm của đường BLE. ML tắt thì gửi ngưỡng INT8 127
+ * và SQI 50% giống app (vòng vẫn áp phần luật).
+ */
+export function bleConfigHex(config: StoredConfig): string {
+  const t = config.thresholds;
+  const model = t.ml_enabled ? thresholdsInt8(t.T) : null;
+  const u8 = (v: number) => Math.min(Math.max(Math.round(v), 0), 255);
+  const i8 = (v: number) => Math.min(Math.max(Math.round(v), -128), 127) & 0xff;
+  const version = Math.min(Math.max(config.version, 0), 0xffff);
+  const bytes = [
+    version & 0xff, version >> 8,
+    u8(t.T), u8(t.crit_T), u8(t.crit_n_min),
+    model ? u8(t.crit_sqi * 100) : 50,
+    u8(t.hr_low), u8(t.hr_high),
+    model ? 1 : 0,
+    i8(model?.watch ?? 127), i8(model?.alert ?? 127),
+    model ? u8(t.alert_k) : 1, model ? u8(t.alert_n) : 1,
+    model ? u8(t.alert_cooldown) : 60,
+    u8(t.upload_interval_min),
+    model ? u8(t.watch_cooldown) : 30,
+  ];
+  return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export const defaultStoredConfig = (): StoredConfig => ({
   version: 0,
   preset: "default",
