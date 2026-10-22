@@ -89,6 +89,7 @@ export function StartVisitModal({
   if (created) {
     return (
       <AppAccessModal
+        patientId={created.patient.id}
         patientName={created.patient.full_name}
         credentials={created.credentials}
         onClose={() => goToPatient(created.patient.id)}

@@ -2,17 +2,21 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { wearableAssessments } from "@/lib/db/schema/wearables";
 import { appError, epochToIso, readJsonObject } from "@/lib/app-api/http";
-import { authorizeApp, ensureDeviceForPatient } from "@/lib/app-api/server";
+import { authorizeIngest, ensureDeviceForPatient } from "@/lib/app-api/server";
 import { validateAssessments } from "@/lib/app-api/validation";
 
 /** Kết quả luật + model của vòng. Upsert theo (device_id, seq). */
 export async function POST(request: NextRequest) {
-  const auth = await authorizeApp(request);
+  const auth = await authorizeIngest(request);
   if (auth.response) return auth.response;
   const parsed = validateAssessments(await readJsonObject(request));
   if (parsed.error !== undefined) return appError(400, "VALIDATION_ERROR", parsed.error);
   const { device_id, items } = parsed.data;
 
+  // Vòng tự gửi qua WiFi chỉ được gửi dữ liệu của chính nó.
+  if (auth.via === "device" && device_id !== auth.deviceId) {
+    return appError(403, "WRONG_DEVICE", "device_id không khớp khóa thiết bị.");
+  }
   const owner = await ensureDeviceForPatient(device_id, auth.patientId);
   if (!owner.ok) return owner.response;
   if (items.length === 0) return NextResponse.json({ accepted: 0 });

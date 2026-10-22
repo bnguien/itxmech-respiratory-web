@@ -1,11 +1,14 @@
 import "server-only";
 
+import { timingSafeEqual } from "node:crypto";
 import { and, eq, isNull, ne } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { appSessions, patientAppAccess } from "@/lib/db/schema/app-access";
 import { deviceAssignments, wearableDevices } from "@/lib/db/schema/wearables";
 import {
+  decryptAccessCode,
+  encryptAccessCode,
   generateAccessCode,
   generateRefreshToken,
   hashAccessCode,
@@ -20,31 +23,42 @@ import { appError } from "./http";
 type Db = typeof db;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
-/** Tạo (hoặc cấp lại) mã truy cập app cho bệnh nhân. Trả mã dạng rõ, chỉ hiện một lần cho bác sĩ. */
+/**
+ * Tạo (hoặc cấp lại) mã truy cập app cho bệnh nhân. Lưu hash để kiểm tra đăng nhập và bản mã hóa để bác sĩ
+ * xem / in lại phiếu bất cứ lúc nào.
+ */
 export async function issueAppAccessCode(patientId: string, executor: Db | Tx = db): Promise<string> {
   const code = generateAccessCode();
   const hash = await hashAccessCode(code);
+  const enc = encryptAccessCode(code);
   const now = new Date().toISOString();
   await executor
     .insert(patientAppAccess)
-    .values({ patientId, accessCodeHash: hash, rotatedAt: now })
+    .values({ patientId, accessCodeHash: hash, accessCodeEnc: enc, rotatedAt: now })
     .onConflictDoUpdate({
       target: patientAppAccess.patientId,
-      set: { accessCodeHash: hash, rotatedAt: now, failedAttempts: 0, lockedUntil: null, revokedAt: null },
+      set: { accessCodeHash: hash, accessCodeEnc: enc, rotatedAt: now, failedAttempts: 0, lockedUntil: null, revokedAt: null },
     });
   return code;
 }
 
-/** Cấp lại mã: các máy đang đăng nhập bằng mã cũ bị đăng xuất. */
+/**
+ * Cấp mã mới (khi mã bị lộ, hoặc mã cũ không còn xem được). Các máy đang đăng nhập vẫn giữ phiên,
+ * người nhà không phải đăng nhập lại; chỉ lần đăng nhập mới phải dùng mã mới.
+ */
 export async function rotateAppAccessCode(patientId: string): Promise<string> {
-  return db.transaction(async (tx) => {
-    const code = await issueAppAccessCode(patientId, tx);
-    await tx
-      .update(appSessions)
-      .set({ revokedAt: new Date().toISOString() })
-      .where(and(eq(appSessions.patientId, patientId), isNull(appSessions.revokedAt)));
-    return code;
-  });
+  return issueAppAccessCode(patientId);
+}
+
+/** Mã truy cập hiện tại để in phiếu. null: chưa cấp, đã thu hồi, hoặc mã cấp trước khi có bản mã hóa. */
+export async function readAppAccessCode(patientId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ enc: patientAppAccess.accessCodeEnc, revokedAt: patientAppAccess.revokedAt })
+    .from(patientAppAccess)
+    .where(eq(patientAppAccess.patientId, patientId))
+    .limit(1);
+  if (!row || row.revokedAt || !row.enc) return null;
+  return decryptAccessCode(row.enc);
 }
 
 export interface IssuedTokens {
@@ -161,3 +175,50 @@ export async function ensureDeviceForPatient(
     return { ok: true as const };
   });
 }
+
+export type IngestAuthorization =
+  | { patientId: string; via: "app" | "device"; deviceId: string | null; response?: never }
+  | { patientId?: never; via?: never; deviceId?: never; response: Response };
+
+/**
+ * Xác thực cho `ingest/*`: app người nhà (Bearer token, `transport: ble_relay`) hoặc chính vòng khi tự gửi qua WiFi
+ * (header `x-device-id` + `x-device-key`, khóa do app cấp qua `POST device-key` rồi ghi xuống vòng bằng BLE).
+ */
+export async function authorizeIngest(request: NextRequest): Promise<IngestAuthorization> {
+  const deviceId = request.headers.get("x-device-id");
+  const deviceKey = request.headers.get("x-device-key");
+  if (!deviceId && !deviceKey) {
+    const app = await authorizeApp(request);
+    if (app.response) return { response: app.response };
+    return { patientId: app.patientId, via: "app", deviceId: null };
+  }
+  if (!deviceId || !deviceKey) return { response: appError(401, "UNAUTHORIZED", "Thiếu x-device-id hoặc x-device-key.") };
+
+  const [row] = await db
+    .select({ hash: wearableDevices.deviceKeyHash })
+    .from(wearableDevices)
+    .where(eq(wearableDevices.deviceId, deviceId))
+    .limit(1);
+  const expected = row?.hash ? Buffer.from(row.hash) : null;
+  const actual = Buffer.from(hashDeviceKey(deviceKey));
+  if (!expected || expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    return { response: appError(401, "UNAUTHORIZED", "Khóa thiết bị không đúng.") };
+  }
+  const [assignment] = await db
+    .select({ patientId: deviceAssignments.patientId })
+    .from(deviceAssignments)
+    .where(and(eq(deviceAssignments.deviceId, deviceId), isNull(deviceAssignments.unassignedAt)))
+    .limit(1);
+  if (!assignment) return { response: appError(404, "NO_ASSIGNMENT", "Vòng chưa được giao cho bệnh nhân nào.") };
+  await db.update(wearableDevices).set({ lastSeenAt: new Date().toISOString(), transport: "wifi" }).where(eq(wearableDevices.deviceId, deviceId));
+  return { patientId: assignment.patientId, via: "device", deviceId };
+}
+
+/** Khóa thiết bị mới cho vòng (thay khóa cũ). Chỉ trả một lần; DB giữ SHA-256. */
+export async function issueDeviceKey(deviceId: string): Promise<string> {
+  const key = generateRefreshToken();
+  await db.update(wearableDevices).set({ deviceKeyHash: hashDeviceKey(key) }).where(eq(wearableDevices.deviceId, deviceId));
+  return key;
+}
+
+const hashDeviceKey = (key: string) => hashRefreshToken(`device:${key}`);

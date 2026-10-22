@@ -1,13 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { defaultConfig } from "@/lib/app-api/config";
+import { toConfigV1 } from "@/lib/monitoring/config";
+import { latestConfig } from "@/lib/monitoring/server";
 import { authorizeApp, currentDeviceOf } from "@/lib/app-api/server";
 
-/** Ngưỡng theo dõi. Chưa có bảng monitoring_configs nên luôn trả config mặc định version 0. */
+/** Ngưỡng theo dõi mới nhất bác sĩ đặt (config.v1). Chưa đặt thì là ngưỡng xuất xưởng version 0. */
 export async function GET(request: NextRequest) {
   const auth = await authorizeApp(request);
   if (auth.response) return auth.response;
-  const device = await currentDeviceOf(auth.patientId);
+  const [config, device] = await Promise.all([latestConfig(auth.patientId), currentDeviceOf(auth.patientId)]);
   return NextResponse.json(
-    defaultConfig(device?.deviceId ?? null, device?.assignmentId ?? null, device !== null),
+    toConfigV1(config, {
+      deviceId: device?.deviceId ?? null,
+      assignmentId: device?.assignmentId ?? null,
+      appliedVersion: device?.appliedConfigVersion ?? null,
+    }),
   );
 }

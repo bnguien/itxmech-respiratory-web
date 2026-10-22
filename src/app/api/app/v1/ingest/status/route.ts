@@ -3,17 +3,22 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { wearableDevices } from "@/lib/db/schema/wearables";
 import { appError, readJsonObject } from "@/lib/app-api/http";
-import { authorizeApp, ensureDeviceForPatient } from "@/lib/app-api/server";
+import { authorizeIngest, ensureDeviceForPatient } from "@/lib/app-api/server";
+import { latestConfigVersion } from "@/lib/monitoring/server";
 import { validateStatus } from "@/lib/app-api/validation";
 
 /** Pin, trạng thái đeo, backlog, config đang áp dụng của vòng. */
 export async function POST(request: NextRequest) {
-  const auth = await authorizeApp(request);
+  const auth = await authorizeIngest(request);
   if (auth.response) return auth.response;
   const parsed = validateStatus(await readJsonObject(request));
   if (parsed.error !== undefined) return appError(400, "VALIDATION_ERROR", parsed.error);
   const s = parsed.data;
 
+  // Vòng tự gửi qua WiFi chỉ được gửi dữ liệu của chính nó.
+  if (auth.via === "device" && s.device_id !== auth.deviceId) {
+    return appError(403, "WRONG_DEVICE", "device_id không khớp khóa thiết bị.");
+  }
   const owner = await ensureDeviceForPatient(s.device_id, auth.patientId);
   if (!owner.ok) return owner.response;
 
@@ -32,5 +37,5 @@ export async function POST(request: NextRequest) {
     })
     .where(eq(wearableDevices.deviceId, s.device_id));
 
-  return NextResponse.json({ config_version_latest: 0, server_time: Math.floor(Date.now() / 1000) });
+  return NextResponse.json({ config_version_latest: await latestConfigVersion(auth.patientId), server_time: Math.floor(Date.now() / 1000) });
 }
