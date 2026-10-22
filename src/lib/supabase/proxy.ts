@@ -16,6 +16,8 @@ const apiDocsRoutes = new Set(["/api/docs", "/api/openapi.json"]);
 const publicApiRoutes = new Set(["/api/health"]);
 
 const selfAuthenticatedApiPrefixes = [
+  // App người nhà: tự kiểm tra Bearer token trong từng route (src/lib/app-api/server.ts).
+  "/api/app",
   "/api/patients",
   "/api/recordings",
   "/api/visits",

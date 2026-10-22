@@ -15,6 +15,19 @@ export interface PatientDetailRecord extends PatientListItem {
   archived_at: string | null;
 }
 
+/** Thông tin đăng nhập app người nhà. access_code chỉ có trong response lúc tạo / cấp lại. */
+export interface AppAccessCredentials {
+  patient_code: string;
+  access_code: string;
+}
+
+export interface PatientAppAccessStatus {
+  patient_code: string;
+  has_access_code: boolean;
+  rotated_at: string | null;
+  active_sessions: number;
+}
+
 export interface PatientInput {
   full_name: string;
   date_of_birth: string;

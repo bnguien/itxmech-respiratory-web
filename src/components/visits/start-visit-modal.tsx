@@ -5,7 +5,13 @@ import { Search, UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PatientDateField, PatientGenderField, PatientNameField } from "@/components/ui/patient-form-fields";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { PatientDetailRecord, PatientListItem, PatientListResponse } from "@/types/patient";
+import { AppAccessModal } from "@/components/patients/app-access-modal";
+import type {
+  AppAccessCredentials,
+  PatientDetailRecord,
+  PatientListItem,
+  PatientListResponse,
+} from "@/types/patient";
 
 const genderLabels = { male: "Nam", female: "Nữ", other: "Khác" } as const;
 
@@ -26,15 +32,20 @@ export function StartVisitModal({
   const [loadingResults, setLoadingResults] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [created, setCreated] = useState<{
+    patient: PatientDetailRecord;
+    credentials: AppAccessCredentials;
+  } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    if (!open) return;
+    // Đang hiện mã đăng nhập app: không cho Esc đóng mất mã.
+    if (!open || created) return;
     const handleKeyDown = (event: KeyboardEvent) =>
       event.key === "Escape" && onClose();
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, created]);
 
   useEffect(() => {
     if (!open || adding) return;
@@ -68,6 +79,23 @@ export function StartVisitModal({
 
   if (!open) return null;
 
+  function goToPatient(patientId: string) {
+    setCreated(null);
+    onClose();
+    router.push(startVisit ? `/patients/${patientId}/visits/new` : `/patients/${patientId}`);
+    router.refresh();
+  }
+
+  if (created) {
+    return (
+      <AppAccessModal
+        patientName={created.patient.full_name}
+        credentials={created.credentials}
+        onClose={() => goToPatient(created.patient.id)}
+      />
+    );
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
@@ -88,6 +116,7 @@ export function StartVisitModal({
       });
       const payload = (await response.json()) as {
         data?: PatientDetailRecord;
+        app_access?: AppAccessCredentials;
         error?: { message?: string; details?: Array<{ message: string }> };
       };
       if (!response.ok || !payload.data) {
@@ -99,13 +128,9 @@ export function StartVisitModal({
         return;
       }
       await onPatientCreated?.();
-      onClose();
-      router.push(
-        startVisit
-          ? `/patients/${payload.data.id}/visits/new`
-          : `/patients/${payload.data.id}`,
-      );
-      router.refresh();
+      // Hiện mã đăng nhập app trước; chuyển trang khi bác sĩ đóng popup.
+      if (payload.app_access) setCreated({ patient: payload.data, credentials: payload.app_access });
+      else goToPatient(payload.data.id);
     } catch {
       setError("Không thể tạo hồ sơ bệnh nhân.");
     } finally {

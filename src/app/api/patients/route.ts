@@ -14,6 +14,7 @@ import {
   withPatientApiTiming,
 } from "@/lib/patients/server";
 import { validatePatientInput } from "@/lib/patients/validation";
+import { issueAppAccessCode } from "@/lib/app-api/server";
 
 export async function GET(request: NextRequest) {
   const requestStartedAt = performance.now();
@@ -111,22 +112,31 @@ export async function POST(request: NextRequest) {
   }
   const result = validatePatientInput(body);
   if (!result.data) return validationError(result.issues);
+  const input = result.data;
 
   try {
-    const [created] = await db
-      .insert(patients)
-      .values({
-        fullName: result.data.full_name!,
-        dateOfBirth: result.data.date_of_birth!,
-        gender: result.data.gender!,
-        phone: result.data.phone ?? null,
-        initialSymptoms: result.data.initial_symptoms ?? null,
-        backgroundDiagnosis: result.data.background_diagnosis ?? null,
-        createdBy: auth.doctorId,
-      })
-      .returning(patientDetailSelection);
+    // Hồ sơ và mã truy cập app tạo cùng một transaction: không có bệnh nhân nào thiếu mã.
+    const { created, accessCode } = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(patients)
+        .values({
+          fullName: input.full_name!,
+          dateOfBirth: input.date_of_birth!,
+          gender: input.gender!,
+          phone: input.phone ?? null,
+          initialSymptoms: input.initial_symptoms ?? null,
+          backgroundDiagnosis: input.background_diagnosis ?? null,
+          createdBy: auth.doctorId,
+        })
+        .returning(patientDetailSelection);
+      return { created: row, accessCode: await issueAppAccessCode(row.id, tx) };
+    });
     return NextResponse.json(
-      { data: serializePatientDetail(created) },
+      {
+        data: serializePatientDetail(created),
+        // Chỉ trả một lần: DB chỉ giữ hash. Web hiện popup cho bác sĩ đưa người nhà.
+        app_access: { patient_code: created.patientCode, access_code: accessCode },
+      },
       { status: 201 },
     );
   } catch (error) {
