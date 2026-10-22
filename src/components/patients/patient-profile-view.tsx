@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PatientDetail } from "@/components/patients/patient-detail";
 import { ArchivePatientModal } from "@/components/patients/archive-patient-modal";
+import { PatientAppAccessCard } from "@/components/patients/patient-app-access-card";
 import { PatientDetailSkeleton } from "@/components/ui/skeleton";
 import type { Patient } from "@/types/clinical";
 import type { PatientDetailRecord, PatientListItem } from "@/types/patient";
@@ -111,6 +112,7 @@ export function PatientProfileView({ id }: { id: string }) {
         restoring={restoring}
         hasClinicalData={false}
       />
+      {!record.archived_at && <PatientAppAccessCard patientId={record.id} patientName={record.full_name} />}
       {editing && (
         <EditPatientModal
           patient={record}
