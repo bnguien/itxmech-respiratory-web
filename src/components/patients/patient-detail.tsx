@@ -10,6 +10,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import type { Patient, Recording } from "@/types/clinical";
@@ -18,6 +19,7 @@ import { AudioWaveform } from "@/components/recordings/audio-waveform";
 import { usePatientWearable } from "@/lib/wearable/use-patient-wearable";
 import { assessmentTriggerLabels, formatClock, formatSpo2, wearableLevelStyles } from "@/lib/wearable/presentation";
 import { Spo2Monitor } from "./spo2-monitor";
+import { ThresholdEditor } from "./threshold-editor";
 import { WearableConnectionBanner, useCurrentReading } from "./wearable-connection";
 import { RANGE_SPEC, WEARABLE_RANGES, hasChartData, summarizeChart, type WearableRange } from "@/lib/wearable/chart";
 import { VisitHistory } from "./visit-history";
@@ -102,6 +104,7 @@ export function PatientDetail({
     isPatientTab(requestedTab) ? requestedTab : "overview",
   );
   const [spo2Range, setSpo2Range] = useState<WearableRange>("24h");
+  const [editingThresholds, setEditingThresholds] = useState(false);
   // SpO₂ thật của bệnh nhân (vòng → app → server), dùng chung cho tab Tổng quan và tab SpO₂.
   const wearable = usePatientWearable(patient.id, spo2Range);
   const current = useCurrentReading(wearable.data);
@@ -287,6 +290,12 @@ export function PatientDetail({
                   <button type="button" onClick={onEdit} className="btn-secondary whitespace-nowrap px-4 py-2.5 text-sm text-[#2F78C8]">
                     <Pencil size={16} />
                     Chỉnh sửa
+                  </button>
+                )}
+                {!isArchived && (
+                  <button type="button" onClick={() => setEditingThresholds(true)} className="btn-secondary whitespace-nowrap px-4 py-2.5 text-sm text-[#2F78C8]">
+                    <SlidersHorizontal size={16} />
+                    Đổi ngưỡng{wearableConfig ? ` (T ${wearableConfig.T}%)` : ""}
                   </button>
                 )}
                 {onArchive && (
@@ -784,6 +793,16 @@ export function PatientDetail({
             ))}
           </div>
         </section>
+      )}
+      {editingThresholds && (
+        <ThresholdEditor
+          patientId={patient.id}
+          onClose={() => setEditingThresholds(false)}
+          onSaved={() => {
+            setEditingThresholds(false);
+            void wearable.reload();
+          }}
+        />
       )}
     </div>
   );

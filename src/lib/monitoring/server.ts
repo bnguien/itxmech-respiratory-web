@@ -56,6 +56,27 @@ export async function latestConfigVersion(patientId: string): Promise<number> {
   return row?.value ?? 0;
 }
 
+/** Cột ngưỡng của một dòng monitoring_configs, dùng chung cho đổi ngưỡng và tạo bệnh nhân mới. */
+export function thresholdColumns(t: MonitoringThresholds) {
+  return {
+    thresholdT: t.T,
+    critT: t.crit_T,
+    critNMin: t.crit_n_min,
+    critSqi: t.crit_sqi,
+    hrLow: t.hr_low,
+    hrHigh: t.hr_high,
+    mlEnabled: t.ml_enabled,
+    watchK: t.watch_k,
+    watchN: t.watch_n,
+    watchCooldown: t.watch_cooldown,
+    alertK: t.alert_k,
+    alertN: t.alert_n,
+    alertCooldown: t.alert_cooldown,
+    critCooldown: t.crit_cooldown,
+    uploadIntervalMin: t.upload_interval_min,
+  };
+}
+
 /** Lưu ngưỡng mới thành version kế tiếp. Hai bác sĩ lưu cùng lúc: khóa (patient_id, version) chặn trùng, thử lại một lần. */
 export async function createConfig(
   patientId: string,
@@ -71,21 +92,7 @@ export async function createConfig(
         patientId,
         version,
         preset,
-        thresholdT: t.T,
-        critT: t.crit_T,
-        critNMin: t.crit_n_min,
-        critSqi: t.crit_sqi,
-        hrLow: t.hr_low,
-        hrHigh: t.hr_high,
-        mlEnabled: t.ml_enabled,
-        watchK: t.watch_k,
-        watchN: t.watch_n,
-        watchCooldown: t.watch_cooldown,
-        alertK: t.alert_k,
-        alertN: t.alert_n,
-        alertCooldown: t.alert_cooldown,
-        critCooldown: t.crit_cooldown,
-        uploadIntervalMin: t.upload_interval_min,
+        ...thresholdColumns(t),
         note,
         setBy: doctorId,
       });
