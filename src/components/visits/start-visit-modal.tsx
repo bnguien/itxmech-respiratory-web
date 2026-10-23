@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { PatientDateField, PatientGenderField, PatientNameField } from "@/components/ui/patient-form-fields";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AppAccessModal } from "@/components/patients/app-access-modal";
+import { DEFAULT_THRESHOLDS, T_MAX, T_MIN, type MonitoringThresholds } from "@/lib/monitoring/config";
 import type {
   AppAccessCredentials,
   PatientDetailRecord,
@@ -14,6 +15,7 @@ import type {
 } from "@/types/patient";
 
 const genderLabels = { male: "Nam", female: "Nữ", other: "Khác" } as const;
+const T_OPTIONS = Array.from({ length: T_MAX - T_MIN + 1 }, (_, i) => T_MIN + i);
 
 export function StartVisitModal({
   open,
@@ -32,6 +34,7 @@ export function StartVisitModal({
   const [loadingResults, setLoadingResults] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [thresholds, setThresholds] = useState<MonitoringThresholds>(DEFAULT_THRESHOLDS);
   const [created, setCreated] = useState<{
     patient: PatientDetailRecord;
     credentials: AppAccessCredentials;
@@ -89,6 +92,7 @@ export function StartVisitModal({
   if (created) {
     return (
       <AppAccessModal
+        patientId={created.patient.id}
         patientName={created.patient.full_name}
         credentials={created.credentials}
         onClose={() => goToPatient(created.patient.id)}
@@ -112,6 +116,7 @@ export function StartVisitModal({
           phone: form.get("phone"),
           initial_symptoms: form.get("initial_symptoms"),
           background_diagnosis: form.get("background_diagnosis"),
+          monitoring: thresholds,
         }),
       });
       const payload = (await response.json()) as {
@@ -145,7 +150,7 @@ export function StartVisitModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-xl rounded-3xl bg-white shadow-2xl"
+        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
       >
         <div className="flex items-start justify-between border-b border-[#E7F1FB] p-5">
           <div>
@@ -269,6 +274,71 @@ export function StartVisitModal({
                 />
               </label>
             </div>
+            <fieldset className="space-y-3 rounded-2xl border border-[#E7F1FB] bg-[#F8FBFE] p-4">
+              <legend className="px-1 text-xs font-bold text-[#173A5E]">Ngưỡng theo dõi SpO₂</legend>
+              <div>
+                <span className="text-xs font-semibold text-[#5A7799]">Ngưỡng T (SpO₂ cần tránh)</span>
+                <div className="mt-2 grid grid-cols-6 gap-1.5 sm:grid-cols-11">
+                  {T_OPTIONS.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setThresholds((prev) => ({ ...prev, T: t, crit_T: Math.min(prev.crit_T, t - 1) }))}
+                      className={`rounded-lg border py-1.5 text-sm font-bold ${thresholds.T === t ? "border-[#2F78C8] bg-[#2F78C8] text-white" : "border-[#DDE8F4] bg-white text-[#173A5E] hover:bg-[#F4F8FD]"}`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-[#5A7799]">
+                  Vòng báo Cảnh báo khi SpO₂ dưới {thresholds.T}% liên tục 3 phút, hoặc AI ước tính nguy cơ xuống dưới {thresholds.T}% trong 30 phút tới.
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <label className="text-xs font-semibold text-[#5A7799]">
+                  Ngưỡng nguy hiểm (%)
+                  <input
+                    type="number"
+                    min={70}
+                    max={thresholds.T - 1}
+                    value={thresholds.crit_T}
+                    onChange={(e) => setThresholds((prev) => ({ ...prev, crit_T: Number(e.target.value) }))}
+                    className="field mt-1"
+                  />
+                </label>
+                <label className="text-xs font-semibold text-[#5A7799]">
+                  Nhịp tim thấp (0 = tắt)
+                  <input
+                    type="number"
+                    min={0}
+                    max={80}
+                    value={thresholds.hr_low}
+                    onChange={(e) => setThresholds((prev) => ({ ...prev, hr_low: Number(e.target.value) }))}
+                    className="field mt-1"
+                  />
+                </label>
+                <label className="text-xs font-semibold text-[#5A7799]">
+                  Nhịp tim cao (0 = tắt)
+                  <input
+                    type="number"
+                    min={0}
+                    max={220}
+                    value={thresholds.hr_high}
+                    onChange={(e) => setThresholds((prev) => ({ ...prev, hr_high: Number(e.target.value) }))}
+                    className="field mt-1"
+                  />
+                </label>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-semibold text-[#173A5E]">
+                <input
+                  type="checkbox"
+                  checked={thresholds.ml_enabled}
+                  onChange={(e) => setThresholds((prev) => ({ ...prev, ml_enabled: e.target.checked }))}
+                />
+                Bật AI dự đoán nguy cơ
+              </label>
+              <p className="text-[11px] text-[#5A7799]">Có thể đổi ngưỡng và tùy chọn nâng cao sau trong hồ sơ bệnh nhân.</p>
+            </fieldset>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex justify-end gap-2">
               <button

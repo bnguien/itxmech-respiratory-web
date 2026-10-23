@@ -59,6 +59,33 @@ export interface WearableStatus {
   transport: WearableTransport;
 }
 
+/** Số hiển thị 15 giây (LIVE v2) mới nhất: cùng số app người nhà đang thấy. */
+export interface LiveReading {
+  ts: number; // epoch giây, cuối cửa sổ đo
+  spo2: number | null;
+  spo2_min: number | null;
+  pulse: number | null;
+  worn: boolean;
+  valid: number; // 0..1
+}
+
+/** Số liệu hiệu năng của vòng trong một cửa sổ 5 phút (DIAG, ble-gatt.md mục 3.9). */
+export interface DeviceDiagnostic {
+  ts: number;
+  boot_id: number;
+  uptime_s: number;
+  cpu_avg_pct: number | null;
+  cpu_peak_pct: number | null;
+  model_ms: number | null;
+  minute_ms: number | null;
+  flash_ms: number | null;
+  heap_min_kb: number | null;
+  wifi_s: number | null;
+  reset_reason: string;
+  ble_drops: number | null;
+  transport: WearableTransport;
+}
+
 /** Phần config.v1 mà web cần để hiển thị ngưỡng đang áp dụng. */
 export interface MonitoringConfig {
   version: number;
@@ -67,4 +94,6 @@ export interface MonitoringConfig {
   model_version: string;
   critical: { crit_T: number; n_min: number; hr_low: number; hr_high: number };
   applied_version: number | null; // version vòng đã xác nhận (config-ack)
+  /** Chu kỳ vòng tự gửi qua WiFi khi mất app (phút). */
+  upload_interval_min?: number;
 }

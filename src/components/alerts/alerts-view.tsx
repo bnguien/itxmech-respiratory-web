@@ -1,119 +1,112 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCheck, ChevronRight } from "lucide-react";
-import { alerts as seed } from "@/constants/mock-data";
+import { Check, CheckCheck, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
+import { alertTime, useWearableAlerts } from "@/lib/alerts/use-wearable-alerts";
+import { transportLabels } from "@/lib/wearable/presentation";
+import type { WearableTransport } from "@/types/wearable";
+
+const filters = [
+  ["unread", "Chưa xem"],
+  ["CRITICAL", "Nguy hiểm"],
+  ["ALERT", "Cảnh báo"],
+  ["all", "Tất cả"],
+] as const;
+type Filter = (typeof filters)[number][0];
+
+const statusLabels = { OPEN: "Đang diễn ra", ACKNOWLEDGED: "Đã xác nhận", RESOLVED: "Đã qua" } as const;
+
+/** Cảnh báo thật từ vòng đeo (ALERT / CRITICAL), cập nhật trực tiếp qua Realtime. */
 export function AlertsView() {
-  const [alerts, setAlerts] = useState(seed);
-  const [filter, setFilter] = useState("all");
-  const list = alerts.filter((a) => filter === "all" || a.type === filter);
+  const { alerts, unread, error, loaded, acknowledge, acknowledgeAll } = useWearableAlerts();
+  const [filter, setFilter] = useState<Filter>("unread");
+  const list = alerts.filter((a) => (filter === "all" ? true : filter === "unread" ? !a.acknowledged_at : a.level === filter));
   return (
     <div className="page w-full space-y-6">
       <PageHeader
         title="Cảnh báo lâm sàng"
-        description="Thông báo kịp thời về giảm oxy máu, âm phổi bất thường và trạng thái thiết bị"
+        description="Cảnh báo SpO₂ và nhịp mạch do vòng đeo gửi về (mức Cảnh báo và Nguy hiểm), mới nhất ở trên"
         action={
           <button
-            onClick={() =>
-              setAlerts((v) => v.map((a) => ({ ...a, unread: false })))
-            }
-            className="flex items-center gap-1.5 rounded-xl border border-[#CCE2F7] bg-[#F4F8FD] px-3 py-1.5 text-xs font-bold text-[#2F78C8] transition hover:bg-[#E7F1FB]"
+            onClick={() => void acknowledgeAll()}
+            disabled={unread.length === 0}
+            className="flex items-center gap-1.5 rounded-xl border border-[#CCE2F7] bg-[#F4F8FD] px-3 py-1.5 text-xs font-bold text-[#2F78C8] transition hover:bg-[#E7F1FB] disabled:opacity-50"
           >
             <CheckCheck size={15} />
-            Đánh dấu tất cả đã đọc
+            Đánh dấu tất cả đã xem
           </button>
         }
       />
       <div className="flex overflow-x-auto rounded-xl border border-[#E7F1FB] bg-[#F4F8FD] p-1">
-        {[
-          ["all", "Tất cả"],
-          ["spo2", "SpO₂ thấp"],
-          ["sound", "Âm phổi bất thường"],
-          ["review", "Bản ghi chờ xác nhận"],
-          ["device", "Thiết bị mất kết nối"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setFilter(id)}
-            className={`chip ${filter === id ? "chip-active" : ""}`}
-          >
+        {filters.map(([id, label]) => (
+          <button key={id} onClick={() => setFilter(id)} className={`chip ${filter === id ? "chip-active" : ""}`}>
             {label}
+            {id === "unread" && unread.length > 0 ? ` (${unread.length})` : ""}
           </button>
         ))}
       </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="card divide-y divide-[#E7F1FB] overflow-hidden">
-        {list.map((a) => {
-          const alertHref = a.patientId
-            ? a.type === "spo2"
-              ? `/patients/${a.patientId}?tab=spo2`
-              : a.type === "sound" || a.type === "review"
-                ? `/patients/${a.patientId}?tab=sound`
-                : `/patients/${a.patientId}`
-            : "/devices";
-          return (
-            <Link
-              key={a.id}
-              href={alertHref}
-              onClick={() =>
-                setAlerts((v) =>
-                  v.map((x) => (x.id === a.id ? { ...x, unread: false } : x)),
-                )
-              }
-              className={`group flex flex-col md:grid md:grid-cols-[32px_minmax(180px,1.5fr)_minmax(280px,3fr)_140px_32px] items-start md:items-center gap-3 md:gap-4 px-5 py-4 transition hover:bg-[#F4F8FD] ${
-                a.unread ? "bg-white" : "bg-[#F8FAFD]/50"
-              }`}
-            >
-              {/* Severity indicator */}
-              <div className="flex items-center justify-center">
-                <i
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    a.severity === "critical"
-                      ? "bg-red-500 ring-4 ring-red-100"
-                      : a.severity === "warning"
-                        ? "bg-amber-500 ring-4 ring-amber-100"
-                        : "bg-[#2F78C8] ring-4 ring-blue-100"
-                  }`}
-                />
-              </div>
-
-              {/* Patient info */}
-              <div className="min-w-0">
-                <b className="block truncate text-xs font-bold text-[#173A5E] group-hover:text-[#2F78C8] transition">
-                  {a.patientName || "Hệ thống thiết bị AIoT"}
-                </b>
-                {a.patientCode && (
-                  <span className="font-mono text-[11px] text-[#5A7799]">
-                    {a.patientCode}
-                  </span>
-                )}
-              </div>
-
-              {/* Message */}
-              <div className="min-w-0">
-                <span className="block text-xs text-[#173A5E] font-medium leading-relaxed">
-                  {a.message}
-                </span>
-              </div>
-
-              {/* Timestamp */}
-              <div className="text-left md:text-right">
-                <span className="text-[11px] font-medium text-[#5A7799]">
-                  {a.time}
-                </span>
-              </div>
-
-              {/* Chevron */}
-              <div className="flex justify-end text-[#9EC9F3] group-hover:text-[#2F78C8] group-hover:translate-x-0.5 transition">
+        {list.map((a) => (
+          <div
+            key={a.id}
+            className={`flex flex-col items-start gap-3 px-5 py-4 md:grid md:grid-cols-[32px_minmax(180px,1.3fr)_minmax(280px,3fr)_150px_auto] md:items-center md:gap-4 ${
+              a.acknowledged_at ? "bg-[#F8FAFD]/50" : "bg-white"
+            }`}
+          >
+            <div className="flex items-center justify-center">
+              <i
+                className={`h-2.5 w-2.5 rounded-full ${
+                  a.level === "CRITICAL" ? "bg-red-500 ring-4 ring-red-100" : "bg-orange-500 ring-4 ring-orange-100"
+                }`}
+              />
+            </div>
+            <div className="min-w-0">
+              <b className="block truncate text-xs font-bold text-[#173A5E]">{a.patient_name}</b>
+              <span className="font-mono text-[11px] text-[#5A7799]">{a.patient_code}</span>
+            </div>
+            <div className="min-w-0">
+              <span className="block text-xs font-medium leading-relaxed text-[#173A5E]">{a.summary}</span>
+              <span className="text-[11px] text-[#5A7799]">
+                {statusLabels[a.status]}
+                {a.transport ? ` · ${transportLabels[a.transport as WearableTransport] ?? a.transport}` : ""}
+                {a.family_acked_at ? ` · ${a.family_acked_by ?? "Người nhà"} đã nhận trên app` : ""}
+              </span>
+            </div>
+            <div className="text-left md:text-right">
+              <span className="text-[11px] font-medium text-[#5A7799]">
+                {alertTime(a.opened_at)}
+                {a.last_seen_at !== a.opened_at ? ` → ${alertTime(a.last_seen_at)}` : ""}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {!a.acknowledged_at && (
+                <button
+                  type="button"
+                  onClick={() => void acknowledge(a.id)}
+                  className="flex items-center gap-1 rounded-lg border border-[#CCE2F7] px-2 py-1 text-[11px] font-bold text-[#2F78C8] hover:bg-[#F4F8FD]"
+                >
+                  <Check size={13} /> Đã xem
+                </button>
+              )}
+              <Link
+                href={`/patients/${a.patient_id}?tab=spo2`}
+                onClick={() => {
+                  if (!a.acknowledged_at) void acknowledge(a.id);
+                }}
+                className="flex items-center text-[#9EC9F3] transition hover:text-[#2F78C8]"
+                aria-label={`Xem SpO₂ của ${a.patient_name}`}
+              >
                 <ChevronRight size={16} />
-              </div>
-            </Link>
-          );
-        })}
+              </Link>
+            </div>
+          </div>
+        ))}
         {list.length === 0 && (
           <p className="p-12 text-center text-xs text-[#5A7799]">
-            Không có cảnh báo trong mục này.
+            {loaded ? "Không có cảnh báo trong mục này." : "Đang tải cảnh báo…"}
           </p>
         )}
       </div>

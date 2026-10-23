@@ -25,99 +25,26 @@ interface ScheduleItem {
   completed: boolean;
 }
 
-const INITIAL_EVENTS: Record<string, ScheduleItem[]> = {
-  "2026-09-25": [
-    {
-      id: "ev-0",
-      time: "09:00",
-      title: "Khám ban đầu & phân tích thở rít",
-      name: "Đỗ Hữu Trí",
-      completed: true,
-    },
-  ],
-  "2026-09-27": [
-    {
-      id: "ev-1",
-      time: "08:30",
-      title: "Đo lại SpO₂ & theo dõi",
-      name: "Trần Văn Mạnh",
-      completed: true,
-    },
-    {
-      id: "ev-2",
-      time: "10:15",
-      title: "Kiểm tra bản ghi âm phổi",
-      name: "Phạm Đức Thành",
-      completed: true,
-    },
-    {
-      id: "ev-3",
-      time: "14:30",
-      title: "Review kết quả AI Crackles",
-      name: "Đỗ Hữu Trí",
-      completed: false,
-    },
-  ],
-  "2026-09-28": [
-    {
-      id: "ev-4",
-      time: "09:00",
-      title: "Khám định kỳ & đo SpO₂",
-      name: "Nguyễn Thị Lan",
-      completed: false,
-    },
-    {
-      id: "ev-5",
-      time: "15:30",
-      title: "Hội chẩn ca COPD tiến triển",
-      name: "BS. Lê Quang Hải",
-      completed: false,
-    },
-  ],
-  "2026-09-29": [
-    {
-      id: "ev-6",
-      time: "08:00",
-      title: "Ghi âm phổi sau khí dung",
-      name: "Hoàng Văn Nam",
-      completed: false,
-    },
-    {
-      id: "ev-7",
-      time: "10:30",
-      title: "Đánh giá hiệu quả thở oxy",
-      name: "Trần Văn Mạnh",
-      completed: false,
-    },
-  ],
-  "2026-09-30": [
-    {
-      id: "ev-8",
-      time: "09:30",
-      title: "Kiểm tra cảm biến SpO₂ đeo tay",
-      name: "Vũ Thị Mai",
-      completed: false,
-    },
-  ],
-  "2026-10-02": [
-    {
-      id: "ev-9",
-      time: "08:15",
-      title: "Khám hô hấp chuyên sâu",
-      name: "Phạm Đức Thành",
-      completed: false,
-    },
-  ],
-  "2026-10-05": [
-    {
-      id: "ev-10",
-      time: "14:00",
-      title: "Đánh giá lại kết quả phân loại âm phổi",
-      name: "Đỗ Hữu Trí",
-      completed: false,
-    },
-  ],
-};
+/** Lịch làm việc riêng của bác sĩ, lưu trong trình duyệt (chưa có bảng lịch hẹn trên server). Bắt đầu trống. */
+const SCHEDULE_STORAGE_KEY = "respicare.doctor-schedule.v1";
+
+function loadSchedule(): Record<string, ScheduleItem[]> {
+  try {
+    const raw = window.localStorage.getItem(SCHEDULE_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, ScheduleItem[]>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSchedule(events: Record<string, ScheduleItem[]>) {
+  try {
+    window.localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(events));
+  } catch {
+    // Trình duyệt chặn lưu: lịch vẫn dùng được trong phiên này.
+  }
+}
 
 const VIETNAMESE_DAYS = [
   "Chủ nhật",
@@ -138,105 +65,6 @@ function getDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function getInitialEvents(referenceDate: Date = new Date()): Record<string, ScheduleItem[]> {
-  const base: Record<string, ScheduleItem[]> = { ...INITIAL_EVENTS };
-  const todayKey = getDateKey(referenceDate);
-
-  const appointments = [
-    { title: "Khám hô hấp & đo SpO₂", name: "Nguyễn Thị Lan" },
-    { title: "Tái khám và ghi âm phổi", name: "Trần Văn Mạnh" },
-    { title: "Kiểm tra bản ghi âm phổi", name: "Phạm Đức Thành" },
-    { title: "Đánh giá kết quả phân loại âm phổi", name: "Đỗ Hữu Trí" },
-    { title: "Khám định kỳ hô hấp", name: "Vũ Thị Mai" },
-    { title: "Theo dõi triệu chứng & đo SpO₂", name: "Hoàng Văn Nam" },
-    { title: "Tái khám sau điều trị", name: "Lê Thị Thu Hà" },
-    { title: "Ghi âm và đánh giá chu kỳ hô hấp", name: "Nguyễn Văn C" },
-  ];
-
-  // Fixed demo schedule through 30 October; Sundays are days off.
-  for (let day = 8; day <= 30; day++) {
-    const date = new Date(2026, 9, day);
-    const key = getDateKey(date);
-    const weekday = date.getDay();
-    const times = weekday === 0 ? [] : weekday === 6
-      ? ["08:30", "10:00"]
-      : ["08:00", "09:30", "14:00", "15:30"];
-    base[key] = times.map((time, index) => ({
-      id: `mock-schedule-${key}-${index}`,
-      time,
-      ...appointments[((day - 8) * 3 + index) % appointments.length],
-      completed: false,
-    }));
-  }
-
-  if (todayKey >= "2026-10-08" && todayKey <= "2026-10-30") return base;
-
-  if (!base[todayKey]) {
-    base[todayKey] = [
-      {
-        id: "ev-today-1",
-        time: "08:30",
-        title: "Đo lại SpO₂ & theo dõi hô hấp",
-        name: "Trần Văn Mạnh",
-        completed: true,
-      },
-      {
-        id: "ev-today-2",
-        time: "10:15",
-        title: "Kiểm tra bản ghi âm phổi",
-        name: "Phạm Đức Thành",
-        completed: false,
-      },
-      {
-        id: "ev-today-3",
-        time: "14:30",
-        title: "Hội chẩn ca COPD tiến triển",
-        name: "Đỗ Hữu Trí",
-        completed: false,
-      },
-    ];
-
-    const tomorrow = new Date(referenceDate);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowKey = getDateKey(tomorrow);
-    if (!base[tomorrowKey]) {
-      base[tomorrowKey] = [
-        {
-          id: "ev-tmr-1",
-          time: "09:00",
-          title: "Khám định kỳ & đo SpO₂",
-          name: "Nguyễn Thị Lan",
-          completed: false,
-        },
-        {
-          id: "ev-tmr-2",
-          time: "15:30",
-          title: "Đánh giá hiệu quả thở oxy",
-          name: "Vũ Thị Mai",
-          completed: false,
-        },
-      ];
-    }
-
-    const yesterday = new Date(referenceDate);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayKey = getDateKey(yesterday);
-    if (!base[yesterdayKey]) {
-      base[yesterdayKey] = [
-        {
-          id: "ev-yest-1",
-          time: "09:00",
-          title: "Khám ban đầu & phân tích thở rít",
-          name: "Đỗ Hữu Trí",
-          completed: true,
-        },
-      ];
-    }
-  }
-
-  return base;
-}
-
 export function DoctorPanel() {
   const { profile } = useDoctorProfile();
   const doctorName = getDoctorDisplayName(profile);
@@ -248,9 +76,8 @@ export function DoctorPanel() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [events, setEvents] = useState<Record<string, ScheduleItem[]>>(() =>
-    getInitialEvents()
-  );
+  const [events, setEvents] = useState<Record<string, ScheduleItem[]>>({});
+  const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [newTime, setNewTime] = useState("09:00");
   const [newTitle, setNewTitle] = useState("");
@@ -261,8 +88,13 @@ export function DoctorPanel() {
     setToday(now);
     setSelectedDate(now);
     setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
-    setEvents(getInitialEvents(now));
+    setEvents(loadSchedule());
+    setScheduleLoaded(true);
   }, []);
+
+  useEffect(() => {
+    if (scheduleLoaded) saveSchedule(events);
+  }, [events, scheduleLoaded]);
 
   const currentYear = viewDate.getFullYear();
   const currentMonth = viewDate.getMonth();

@@ -1,4 +1,6 @@
 import {
+  createCipheriv,
+  createDecipheriv,
   createHash,
   createHmac,
   randomBytes,
@@ -39,6 +41,34 @@ export async function verifyAccessCode(code: string, stored: string): Promise<bo
   const expected = Buffer.from(hashText, "base64url");
   const actual = await scrypt(code, Buffer.from(saltText, "base64url"), expected.length);
   return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+/**
+ * Mã hóa mã truy cập để bác sĩ in lại phiếu đăng nhập. AES-256-GCM, khóa suy ra từ APP_JWT_SECRET
+ * (đổi secret thì mã cũ không giải được: bác sĩ cấp mã mới). Dạng lưu: `v1:<iv>:<tag>:<ciphertext>` (base64url).
+ */
+export function encryptAccessCode(code: string, secret = appJwtSecret()): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", accessCodeKey(secret), iv);
+  const ciphertext = Buffer.concat([cipher.update(code, "utf8"), cipher.final()]);
+  return ["v1", iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), ciphertext.toString("base64url")].join(":");
+}
+
+/** null nếu sai định dạng, sai khóa hoặc bị sửa. */
+export function decryptAccessCode(stored: string, secret = appJwtSecret()): string | null {
+  const [version, iv, tag, ciphertext] = stored.split(":");
+  if (version !== "v1" || !iv || !tag || !ciphertext) return null;
+  try {
+    const decipher = createDecipheriv("aes-256-gcm", accessCodeKey(secret), Buffer.from(iv, "base64url"));
+    decipher.setAuthTag(Buffer.from(tag, "base64url"));
+    return Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()]).toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function accessCodeKey(secret: string) {
+  return createHash("sha256").update(`respicare-access-code:${secret}`).digest();
 }
 
 /** Refresh token ngẫu nhiên; DB chỉ giữ SHA-256 của nó. */

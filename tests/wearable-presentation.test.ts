@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { mockAssessments, mockTelemetry, spo2DataByRange } from "@/constants/spo2";
 import {
   formatClock,
+  wearableConnection,
   minutesUntilModelReady,
   probFromQ,
   riskThresholds,
@@ -35,21 +35,23 @@ describe("wearable presentation", () => {
 
   it("đếm số phút còn thiếu để model đủ cửa sổ 60 phút", () => {
     expect(minutesUntilModelReady(Array.from({ length: 45 }, (_, i) => sample(95, i)))).toBe(15);
-    expect(minutesUntilModelReady(mockTelemetry)).toBe(0);
+    expect(minutesUntilModelReady(Array.from({ length: 90 }, (_, i) => sample(95, i)))).toBe(0);
   });
 
   it("hiển thị giờ Việt Nam", () => {
     expect(formatClock(1792312200)).toBe("15:30");
   });
 
-  it("dữ liệu mẫu theo đúng định dạng assessment.v1", () => {
-    expect(mockTelemetry).toHaveLength(1440);
-    expect(mockAssessments.length).toBeGreaterThan(200);
-    for (const item of mockAssessments) {
-      expect(item.ran_model).toBe(item.prob !== null);
-      if (item.level === "UNKNOWN") expect(["signal_lost", "none"]).toContain(item.trigger);
-    }
-    expect(mockAssessments.some((item) => item.notify.alert)).toBe(true);
-    expect(spo2DataByRange["24h"].length).toBeGreaterThan(80);
+  it("trạng thái kết nối vòng theo lần cuối nhận dữ liệu và đường truyền", () => {
+    const now = 1792312200;
+    expect(wearableConnection(null, now).kind).toBe("none");
+    expect(wearableConnection({ ts: now - 40, transport: "ble_relay", worn: true }, now).kind).toBe("live");
+    expect(wearableConnection({ ts: now - 40, transport: "ble_relay", worn: false }, now).kind).toBe("not_worn");
+    // Mất app: chưa tới chu kỳ WiFi thì là gián đoạn, quá chu kỳ + 5 phút là mất kết nối.
+    expect(wearableConnection({ ts: now - 5 * 60, transport: "ble_relay", worn: true }, now).kind).toBe("interrupted");
+    expect(wearableConnection({ ts: now - 16 * 60, transport: "ble_relay", worn: true }, now).kind).toBe("lost");
+    // Vòng tự gửi qua WiFi mỗi 10 phút: 12 phút chưa có gì vẫn là bình thường của chế độ WiFi.
+    expect(wearableConnection({ ts: now - 12 * 60, transport: "wifi", worn: true }, now, 10).kind).toBe("wifi");
+    expect(wearableConnection({ ts: now - 40 * 60, transport: "wifi", worn: true }, now, 10).kind).toBe("lost");
   });
 });

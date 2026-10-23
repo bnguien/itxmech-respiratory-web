@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -10,25 +10,23 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import type { Patient, Recording } from "@/types/clinical";
 import { Spo2Chart } from "@/components/dashboard/spo2-chart";
 import { AudioWaveform } from "@/components/recordings/audio-waveform";
-import { mockAssessments, mockMonitoringConfig, spo2DataByRange } from "@/constants/spo2";
+import { usePatientWearable } from "@/lib/wearable/use-patient-wearable";
 import { assessmentTriggerLabels, formatClock, formatSpo2, wearableLevelStyles } from "@/lib/wearable/presentation";
 import { Spo2Monitor } from "./spo2-monitor";
+import { ThresholdEditor } from "./threshold-editor";
+import { WearableConnectionBanner, useCurrentReading } from "./wearable-connection";
+import { RANGE_SPEC, WEARABLE_RANGES, hasChartData, summarizeChart, type WearableRange } from "@/lib/wearable/chart";
 import { VisitHistory } from "./visit-history";
 import { PatientRecordingsList } from "@/components/recordings/patient-recordings-list";
 import { CycleLabelBadge, SoundLabel } from "@/components/ui/status-badge";
 import { legacyCycleLabel } from "@/lib/recordings/presentation";
 
-type Spo2Range = "24h" | "7d" | "30d";
-const spo2Ranges: Array<{ id: Spo2Range; label: string }> = [
-  { id: "24h", label: "24 giờ" },
-  { id: "7d", label: "7 ngày" },
-  { id: "30d", label: "30 ngày" },
-];
 
 const tabs = [
   ["overview", "Tổng quan"],
@@ -43,14 +41,33 @@ function isPatientTab(value: string | null): value is PatientTab {
   return tabs.some(([id]) => id === value);
 }
 
-function getCurrentTimestamp() {
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, "0");
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const year = now.getFullYear();
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  return `${day}/${month}/${year} · ${hours}:${minutes}`;
+const INITIAL_SYMPTOMS_ID = "initial-symptoms";
+const noteTimeFormat = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+interface DoctorNoteApi {
+  id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  doctor_name: string;
+}
+
+function toPatientNote(note: DoctorNoteApi): PatientNote {
+  const edited = note.updated_at !== note.created_at;
+  return {
+    id: note.id,
+    content: note.content,
+    createdAt: `${noteTimeFormat.format(new Date(note.updated_at))}${edited ? " (đã sửa)" : ""}`,
+    doctor: note.doctor_name,
+  };
 }
 
 interface PatientNote {
@@ -86,55 +103,99 @@ export function PatientDetail({
   const [tab, setTab] = useState<PatientTab>(
     isPatientTab(requestedTab) ? requestedTab : "overview",
   );
-  const [spo2Range, setSpo2Range] = useState<Spo2Range>("24h");
-  const currentSpo2Data = spo2DataByRange[spo2Range];
-  const latestAssessment = mockAssessments.at(-1);
-  const latestNotified = mockAssessments.findLast(
+  const [spo2Range, setSpo2Range] = useState<WearableRange>("24h");
+  const [editingThresholds, setEditingThresholds] = useState(false);
+  // SpO₂ thật của bệnh nhân (vòng → app → server), dùng chung cho tab Tổng quan và tab SpO₂.
+  const wearable = usePatientWearable(patient.id, spo2Range);
+  const current = useCurrentReading(wearable.data);
+  const currentSpo2Data = useMemo(() => wearable.data?.chart ?? [], [wearable.data]);
+  const wearableConfig = wearable.data?.config;
+  const wearableAssessments = wearable.data?.assessments ?? [];
+  const latestAssessment = wearableAssessments.at(-1);
+  const latestSampleSpo2 = wearable.data?.samples.findLast((sample) => sample.spo2_mean !== null)?.spo2_mean ?? null;
+  const hasWearableData = latestAssessment !== undefined || latestSampleSpo2 !== null;
+  const latestNotified = wearableAssessments.findLast(
     (item) => item.notify.watch || item.notify.alert || item.notify.critical,
   );
   const latestLevelStyle = wearableLevelStyles[latestAssessment?.level ?? "UNKNOWN"];
-  const isNguyenVanA = patient.code === "PAT-000024" && patient.name === "Nguyễn Văn A";
 
-  const [notes, setNotes] = useState<PatientNote[]>(() => {
-    const initialNotes: PatientNote[] = patient.initialSymptoms
-      ? [
-          {
-            id: "initial-symptoms",
-            content: patient.initialSymptoms,
-            createdAt: "Ghi nhận ban đầu",
-            doctor: "Bác sĩ ghi nhận",
-          },
-        ]
-      : [];
-    return [
-      ...initialNotes,
-      {
-        id: "note-1",
-        content:
-          patient.visits[0]?.note ||
-          "Theo dõi SpO₂, cân nhắc hỗ trợ oxy nếu dưới 88%. Tiếp tục theo dõi và đánh giá lại âm phổi trong lần khám tiếp theo.",
-        createdAt: "27/09/2026 · 15:35",
-        doctor: "BS. Nguyễn Bảo Nguyên",
-      },
-    ];
-  });
+  // Lời dặn lưu ở server (bảng doctor_notes), người nhà đọc trên app. Triệu chứng ban đầu lấy từ hồ sơ, chỉ hiện trên web.
+  const [savedNotes, setSavedNotes] = useState<PatientNote[]>([]);
+  const [initialSymptoms, setInitialSymptoms] = useState<string | null>(patient.initialSymptoms ?? null);
+  const notes = useMemo<PatientNote[]>(
+    () => [
+      ...savedNotes,
+      ...(initialSymptoms
+        ? [{ id: INITIAL_SYMPTOMS_ID, content: initialSymptoms, createdAt: "Ghi nhận ban đầu", doctor: "Triệu chứng ban đầu (chỉ hiện trên web)" }]
+        : []),
+    ],
+    [savedNotes, initialSymptoms],
+  );
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [newNoteText, setNewNoteText] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
   const [noteError, setNoteError] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
 
-  const handleAddNote = () => {
-    if (isArchived || !newNoteText.trim()) return;
-    const newNote: PatientNote = {
-      id: `note-${Date.now()}`,
-      content: newNoteText.trim(),
-      createdAt: getCurrentTimestamp(),
-      doctor: "BS. Nguyễn Bảo Nguyên",
-    };
-    setNotes((prev) => [newNote, ...prev]);
-    setNewNoteText("");
-    setIsAddingNote(false);
+  /** Gọi API lời dặn; thành công thì thay danh sách bằng bản server trả về. */
+  const callNotes = useCallback(
+    async (path: string, init?: RequestInit) => {
+      setNoteError("");
+      try {
+        const response = await fetch(`/api/patients/${patient.id}/notes${path}`, {
+          cache: "no-store",
+          ...init,
+          headers: init?.body ? { "Content-Type": "application/json" } : undefined,
+        });
+        const payload = (await response.json()) as {
+          data?: DoctorNoteApi[];
+          error?: { message?: string; details?: Array<{ message: string }> };
+        };
+        if (!response.ok || !payload.data) {
+          setNoteError(payload.error?.details?.[0]?.message || payload.error?.message || "Không thể cập nhật lời dặn.");
+          return false;
+        }
+        setSavedNotes(payload.data.map(toPatientNote));
+        return true;
+      } catch {
+        setNoteError("Không thể cập nhật lời dặn.");
+        return false;
+      }
+    },
+    [patient.id],
+  );
+
+  useEffect(() => {
+    // Tải danh sách lần đầu; callNotes tự quản lý trạng thái và được dùng lại sau mỗi thao tác.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void callNotes("");
+  }, [callNotes]);
+
+  const updateInitialSymptoms = async (value: string | null) => {
+    const response = await fetch(`/api/patients/${patient.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initial_symptoms: value }),
+    });
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: { message?: string } };
+      setNoteError(payload.error?.message || "Không thể cập nhật triệu chứng ban đầu.");
+      return false;
+    }
+    setInitialSymptoms(value);
+    return true;
+  };
+
+  const handleAddNote = async () => {
+    if (isArchived || !newNoteText.trim() || noteBusy) return;
+    setNoteBusy(true);
+    const ok = await callNotes("", { method: "POST", body: JSON.stringify({ content: newNoteText.trim() }) });
+    setNoteBusy(false);
+    if (ok) {
+      setNewNoteText("");
+      setIsAddingNote(false);
+    }
   };
 
   const handleStartEditNote = (note: PatientNote) => {
@@ -143,25 +204,18 @@ export function PatientDetail({
     setEditingNoteText(note.content);
   };
 
-  const handleSaveEditNote = (noteId: string) => {
-    if (isArchived || !editingNoteText.trim()) return;
-    const nowTimestamp = getCurrentTimestamp();
-    setNotes((prev) => {
-      const updated = prev.map((n) =>
-        n.id === noteId
-          ? {
-              ...n,
-              content: editingNoteText.trim(),
-              createdAt: nowTimestamp,
-            }
-          : n,
-      );
-      const editedItem = updated.find((n) => n.id === noteId);
-      const remaining = updated.filter((n) => n.id !== noteId);
-      return editedItem ? [editedItem, ...remaining] : updated;
-    });
-    setEditingNoteId(null);
-    setEditingNoteText("");
+  const handleSaveEditNote = async (noteId: string) => {
+    if (isArchived || !editingNoteText.trim() || noteBusy) return;
+    setNoteBusy(true);
+    const ok =
+      noteId === INITIAL_SYMPTOMS_ID
+        ? await updateInitialSymptoms(editingNoteText.trim())
+        : await callNotes(`/${noteId}`, { method: "PATCH", body: JSON.stringify({ content: editingNoteText.trim() }) });
+    setNoteBusy(false);
+    if (ok) {
+      setEditingNoteId(null);
+      setEditingNoteText("");
+    }
   };
 
   const handleCancelEditNote = () => {
@@ -170,42 +224,24 @@ export function PatientDetail({
   };
 
   const handleDeleteNote = async (noteId: string) => {
-    if (isArchived) return;
-    setNoteError("");
-    if (noteId === "initial-symptoms") {
-      try {
-        const response = await fetch(`/api/patients/${patient.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initial_symptoms: null }),
-        });
-        if (!response.ok) {
-          const payload = (await response.json()) as { error?: { message?: string } };
-          setNoteError(payload.error?.message || "Không thể xóa ghi chú triệu chứng ban đầu.");
-          return;
-        }
-      } catch {
-        setNoteError("Không thể xóa ghi chú triệu chứng ban đầu.");
-        return;
-      }
-    }
-    setNotes((prev) => prev.filter((n) => n.id !== noteId));
-    if (editingNoteId === noteId) {
+    if (isArchived || noteBusy) return;
+    setNoteBusy(true);
+    const ok = noteId === INITIAL_SYMPTOMS_ID ? await updateInitialSymptoms(null) : await callNotes(`/${noteId}`, { method: "DELETE" });
+    setNoteBusy(false);
+    if (ok && editingNoteId === noteId) {
       setEditingNoteId(null);
       setEditingNoteText("");
     }
   };
 
   const spo2Summary = useMemo(() => {
-    const values = currentSpo2Data.map((point) => point.value);
+    const chart = summarizeChart(currentSpo2Data);
     return {
-      current: values.at(-1) ?? patient.spo2,
-      average: Math.round(
-        values.reduce((total, val) => total + val, 0) / values.length,
-      ),
-      lowest: Math.min(...values),
+      current: latestSampleSpo2 ?? chart?.current ?? null,
+      average: chart?.average ?? null,
+      lowest: chart?.lowest ?? null,
     };
-  }, [currentSpo2Data, patient.spo2]);
+  }, [currentSpo2Data, latestSampleSpo2]);
 
   useEffect(() => {
     if (isPatientTab(requestedTab)) {
@@ -256,6 +292,12 @@ export function PatientDetail({
                     Chỉnh sửa
                   </button>
                 )}
+                {!isArchived && (
+                  <button type="button" onClick={() => setEditingThresholds(true)} className="btn-secondary whitespace-nowrap px-4 py-2.5 text-sm text-[#2F78C8]">
+                    <SlidersHorizontal size={16} />
+                    Đổi ngưỡng{wearableConfig ? ` (T ${wearableConfig.T}%)` : ""}
+                  </button>
+                )}
                 {onArchive && (
                   <button type="button" onClick={onArchive} className="btn-secondary whitespace-nowrap px-4 py-2.5 text-sm text-[#2F78C8]">
                     <Archive size={16} />
@@ -285,26 +327,35 @@ export function PatientDetail({
           </div>
         </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex min-w-[390px] items-center rounded-3xl border border-[#CCE2F7] bg-[#F2F7FD] px-7 py-6">
-            <div className="flex-1 border-r border-[#CCE2F7]">
+          <div className="flex w-full items-center rounded-3xl border border-[#CCE2F7] bg-[#F2F7FD] px-7 py-6 sm:min-w-[480px]">
+            <div className="min-w-0 flex-1 border-r border-[#CCE2F7]">
               <span className="text-xs uppercase tracking-wide text-[#5A7799]">
                 SpO₂ hiện tại
               </span>
-              <p className={`mt-1 text-4xl font-extrabold ${isNguyenVanA ? "text-[#22C55E]" : hasClinicalData ? latestLevelStyle.text : "text-[#5A7799]"}`}>
-                {isNguyenVanA ? "95%" : hasClinicalData ? formatSpo2(latestAssessment?.spo2_now ?? null) : "—"}{" "}
-                <small className="text-sm">
-                  {isNguyenVanA ? "Bình thường" : hasClinicalData ? latestLevelStyle.name : "Chưa có dữ liệu"}
-                </small>
-              </p>
+              {hasWearableData && current && !current.fresh ? (
+                // Mất kết nối: không giữ mức "Bình thường" cũ, nói rõ không nhận được SpO₂.
+                <p className="mt-1 text-4xl font-extrabold text-[#9EB4CC]">
+                  —{" "}
+                   <small className="whitespace-nowrap text-sm text-red-600">Mất tín hiệu SpO₂</small>
+                </p>
+              ) : (
+                <p className={`mt-1 text-4xl font-extrabold ${hasWearableData ? latestLevelStyle.text : "text-[#5A7799]"}`}>
+                  {hasWearableData
+                    ? formatSpo2(current?.reading?.spo2 ?? latestSampleSpo2 ?? latestAssessment?.spo2_now ?? null)
+                    : "—"}{" "}
+                   <small className="whitespace-nowrap text-sm">
+                    {hasWearableData ? latestLevelStyle.name : "Chưa có dữ liệu"}
+                  </small>
+                </p>
+              )}
             </div>
             <div className="flex-1 pl-8">
               <span className="text-xs uppercase tracking-wide text-[#5A7799]">
                 Âm phổi AI
               </span>
               <p className="mt-1 font-extrabold text-[#5A7799]">
-                {isNguyenVanA ? "Normal / Crackle" : hasClinicalData ? <SoundLabel value={patient.sound} /> : "Chưa có dữ liệu"}
+                {hasClinicalData ? <SoundLabel value={patient.sound} /> : "Chưa có dữ liệu"}
               </p>
-              {isNguyenVanA && <p className="mt-1 text-xs text-[#5A7799]">Có ghi nhận một số đoạn Wheeze</p>}
             </div>
           </div>
           {!isArchived && <Link
@@ -337,11 +388,11 @@ export function PatientDetail({
                 <div>
                   <h2 className="text-lg font-extrabold">Xu hướng SpO₂</h2>
                   <p className="mt-1 text-sm text-[#5A7799]">
-                    Theo dõi thời gian thực
+                    {wearable.live ? "● Cập nhật trực tiếp từ vòng" : "Theo dõi từ vòng đeo SpO₂"}
                   </p>
                 </div>
                 <div className="flex rounded-xl bg-[#F1F6FB] p-1 text-sm">
-                  {spo2Ranges.map((rangeItem) => (
+                  {WEARABLE_RANGES.map((rangeItem) => (
                     <button
                       key={rangeItem.id}
                       type="button"
@@ -357,30 +408,52 @@ export function PatientDetail({
                   ))}
                 </div>
               </div>
-              <div className="mt-12">
-                <Spo2Chart
-                  data={currentSpo2Data}
-                  threshold={mockMonitoringConfig.T}
-                  criticalThreshold={mockMonitoringConfig.critical.crit_T}
+              <div className="mt-5">
+                <WearableConnectionBanner
+                  device={wearable.data?.device ?? null}
+                  uploadIntervalMin={wearableConfig?.upload_interval_min}
+                  loading={wearable.loading && !wearable.data}
                 />
               </div>
+              <div className="mt-6">
+                {hasChartData(currentSpo2Data) ? (
+                  <Spo2Chart
+                    data={currentSpo2Data}
+                    range={spo2Range}
+                    threshold={wearableConfig?.T}
+                    criticalThreshold={wearableConfig?.critical.crit_T}
+                  />
+                ) : (
+                  <div className="flex h-[340px] items-center justify-center rounded-2xl border border-dashed border-[#DDE8F4] text-sm text-[#5A7799]">
+                    {wearable.loading ? "Đang tải…" : "Chưa có số đo SpO₂. Người nhà kết nối vòng trên app để bắt đầu."}
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-[#5A7799]">{RANGE_SPEC[spo2Range].note} · Đoạn trống: không có số đo (mất kết nối hoặc không đeo vòng)</p>
               <div className="mt-4 grid grid-cols-3 border-t border-[#E1ECF7] pt-5 text-center">
                 <div>
                   <small className="text-[#5A7799]">Hiện tại</small>
-                  <p className="mt-1 text-xl font-extrabold text-[#EF4444]">
-                    {spo2Summary.current}%
-                  </p>
+                  {current && !current.fresh && current.reading ? (
+                    <>
+                      <p className="mt-1 text-xl font-extrabold text-[#9EB4CC]">—</p>
+                      <p className="text-[11px] font-semibold text-red-600">Mất tín hiệu</p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-xl font-extrabold text-[#EF4444]">
+                      {formatSpo2(current?.reading?.spo2 ?? spo2Summary.current)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <small className="text-[#5A7799]">Trung bình</small>
                   <p className="mt-1 text-xl font-extrabold text-[#173A5E]">
-                    {spo2Summary.average}%
+                    {formatSpo2(spo2Summary.average)}
                   </p>
                 </div>
                 <div>
                   <small className="text-[#5A7799]">Thấp nhất</small>
                   <p className="mt-1 text-xl font-extrabold text-[#EF4444]">
-                    {spo2Summary.lowest}%
+                    {formatSpo2(spo2Summary.lowest)}
                   </p>
                 </div>
               </div>
@@ -500,7 +573,7 @@ export function PatientDetail({
                               disabled={isArchived}
                               title="Xóa ghi chú"
                               aria-label="Xóa ghi chú"
-                              onClick={() => handleDeleteNote(item.id)}
+                              onClick={() => void handleDeleteNote(item.id)}
                               className="flex h-7 w-7 items-center justify-center rounded-lg text-[#5A7799] transition hover:bg-red-50 hover:text-red-500"
                             >
                               <Trash2 size={13} />
@@ -542,7 +615,7 @@ export function PatientDetail({
                       onClick={handleAddNote}
                       className="btn-primary px-3.5 py-1.5 text-xs font-bold disabled:opacity-40"
                     >
-                      Lưu ghi chú
+                      {noteBusy ? "Đang lưu..." : "Lưu lời dặn"}
                     </button>
                   </div>
                 </div>
@@ -552,7 +625,7 @@ export function PatientDetail({
                   onClick={() => setIsAddingNote(true)}
                   className="mt-5 inline-flex items-center gap-1.5 text-sm font-bold text-[#2F78C8] hover:underline"
                 >
-                  + Thêm ghi chú mới
+                  + Thêm lời dặn
                 </button>
               ))}
             </section>
@@ -576,7 +649,19 @@ export function PatientDetail({
         </div>
       )}
 
-      {tab === "spo2" && <Spo2Monitor />}
+      {tab === "spo2" && (
+        <Spo2Monitor
+          patientId={patient.id}
+          wearable={wearable.data}
+          loading={wearable.loading}
+          error={wearable.error}
+          live={wearable.live}
+          range={spo2Range}
+          onRangeChange={setSpo2Range}
+          onConfigSaved={() => void wearable.reload()}
+          readOnly={isArchived}
+        />
+      )}
       {tab === "sound" && <PatientRecordingsList patientId={patient.id} />}
       {tab === "history" && <VisitHistory patient={patient} readOnly={isArchived} />}
       {tab === "notes" && (
@@ -584,11 +669,10 @@ export function PatientDetail({
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <h2 className="text-base font-extrabold text-[#173A5E] sm:text-lg">
-                Ghi chú lâm sàng ({notes.length})
+                Lời dặn của bác sĩ ({notes.length})
               </h2>
               <p className="mt-1 text-xs text-[#5A7799]">
-                Toàn bộ chỉ định và lưu ý theo dõi của bác sĩ cho bệnh nhân{" "}
-                {patient.name}
+                Người nhà của {patient.name} đọc các lời dặn này trên app RespiCare (một chiều, không trả lời).
               </p>
             </div>
             {!isArchived && !isAddingNote && (
@@ -597,7 +681,7 @@ export function PatientDetail({
                 onClick={() => setIsAddingNote(true)}
                 className="btn-primary flex items-center gap-1.5 px-4 py-2 text-xs font-bold self-start sm:self-auto"
               >
-                + Thêm ghi chú mới
+                + Thêm lời dặn
               </button>
             )}
           </div>
@@ -607,7 +691,7 @@ export function PatientDetail({
           {!isArchived && isAddingNote && (
             <div className="rounded-2xl border border-[#CCE2F7] bg-[#F8FAFD] p-5 space-y-3">
               <h3 className="text-xs font-bold uppercase text-[#173A5E]">
-                Tạo ghi chú lâm sàng
+                Lời dặn mới (gửi tới app người nhà)
               </h3>
               <textarea
                 value={newNoteText}
@@ -629,11 +713,11 @@ export function PatientDetail({
                 </button>
                 <button
                   type="button"
-                  disabled={!newNoteText.trim()}
-                  onClick={handleAddNote}
+                  disabled={!newNoteText.trim() || noteBusy}
+                  onClick={() => void handleAddNote()}
                   className="btn-primary px-4 py-2 text-xs font-bold disabled:opacity-40"
                 >
-                  Lưu ghi chú
+                  {noteBusy ? "Đang lưu..." : "Lưu lời dặn"}
                 </button>
               </div>
             </div>
@@ -663,8 +747,8 @@ export function PatientDetail({
                       </button>
                       <button
                         type="button"
-                        disabled={!editingNoteText.trim()}
-                        onClick={() => handleSaveEditNote(item.id)}
+                        disabled={!editingNoteText.trim() || noteBusy}
+                        onClick={() => void handleSaveEditNote(item.id)}
                         className="btn-primary px-3.5 py-1.5 text-xs font-bold disabled:opacity-40"
                       >
                         Lưu
@@ -691,7 +775,7 @@ export function PatientDetail({
                           disabled={isArchived}
                           title="Xóa ghi chú"
                           aria-label="Xóa ghi chú"
-                          onClick={() => handleDeleteNote(item.id)}
+                          onClick={() => void handleDeleteNote(item.id)}
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-[#5A7799] transition hover:bg-red-50 hover:text-red-500"
                         >
                           <Trash2 size={13} />
@@ -709,6 +793,16 @@ export function PatientDetail({
             ))}
           </div>
         </section>
+      )}
+      {editingThresholds && (
+        <ThresholdEditor
+          patientId={patient.id}
+          onClose={() => setEditingThresholds(false)}
+          onSaved={() => {
+            setEditingThresholds(false);
+            void wearable.reload();
+          }}
+        />
       )}
     </div>
   );

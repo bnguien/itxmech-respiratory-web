@@ -2,40 +2,28 @@
 
 import { useMemo, useState } from "react";
 import { Spo2Chart } from "@/components/dashboard/spo2-chart";
+import { ThresholdEditor } from "@/components/patients/threshold-editor";
 import { WearableLevelBadge } from "@/components/ui/status-badge";
+import { RANGE_SPEC, WEARABLE_RANGES, hasChartData, summarizeChart, type WearableRange } from "@/lib/wearable/chart";
+import { WearableConnectionBanner, useCurrentReading } from "./wearable-connection";
+import { DeviceDiagnosticsPanel } from "./device-diagnostics";
+import type { PatientWearableData } from "@/lib/wearable/server";
 import {
-  mockAssessments,
-  mockMonitoringConfig,
-  mockTelemetry,
-  mockWearableStatus,
-  spo2DataByRange,
-} from "@/constants/spo2";
-import {
+  LIVE_PERIOD_SECONDS,
   MODEL_EVAL_EVERY_MIN,
   MODEL_WINDOW_MIN,
   RULE_EVENT_MIN,
   assessmentTriggerLabels,
   formatClock,
+  formatClockSeconds,
   formatProb,
   formatSpo2,
   minutesUntilModelReady,
   riskThresholds,
   summarizeSamples,
   transportLabels,
+  wearableLevelStyles,
 } from "@/lib/wearable/presentation";
-import type {
-  Assessment,
-  MonitoringConfig,
-  TelemetrySample,
-  WearableStatus,
-} from "@/types/wearable";
-
-type Range = "24h" | "7d" | "30d";
-const ranges: Array<{ id: Range; label: string }> = [
-  { id: "24h", label: "24 giờ" },
-  { id: "7d", label: "7 ngày" },
-  { id: "30d", label: "30 ngày" },
-];
 
 function RiskBar({ prob, T }: { prob: number; T: number }) {
   const thresholds = riskThresholds(T);
@@ -56,34 +44,52 @@ function RiskBar({ prob, T }: { prob: number; T: number }) {
   );
 }
 
+/**
+ * Tab SpO₂ của hồ sơ bệnh nhân: dữ liệu thật từ vòng (qua app gateway), cập nhật bằng Supabase Realtime.
+ * Dữ liệu do PatientDetail tải một lần (usePatientWearable) và dùng chung với tab Tổng quan.
+ */
 export function Spo2Monitor({
-  samples = mockTelemetry,
-  assessments = mockAssessments,
-  status = mockWearableStatus,
-  config = mockMonitoringConfig,
+  patientId,
+  wearable,
+  loading,
+  error,
+  live,
+  range,
+  onRangeChange,
+  onConfigSaved,
+  readOnly = false,
 }: {
-  samples?: TelemetrySample[];
-  assessments?: Assessment[];
-  status?: WearableStatus;
-  config?: MonitoringConfig;
+  patientId: string;
+  wearable: PatientWearableData | null;
+  loading: boolean;
+  error: string;
+  live: boolean;
+  range: WearableRange;
+  onRangeChange: (range: WearableRange) => void;
+  onConfigSaved: () => void;
+  readOnly?: boolean;
 }) {
-  const [range, setRange] = useState<Range>("24h");
-  const data = spo2DataByRange[range];
+  const [editing, setEditing] = useState(false);
+  const current = useCurrentReading(wearable);
+  const samples = useMemo(() => wearable?.samples ?? [], [wearable]);
+  const assessments = useMemo(() => wearable?.assessments ?? [], [wearable]);
+  const data = useMemo(() => wearable?.chart ?? [], [wearable]);
+  const status = wearable?.device ?? null;
+  const config = wearable?.config;
   const latest = assessments.at(-1);
+  const reading = current?.reading ?? null;
+  // Gián đoạn / mất kết nối: không hiển thị số và mức cũ như số hiện tại.
+  const stale = !!current && !!status && !current.fresh;
   const latestModelRun = assessments.findLast((item) => item.ran_model);
   const waitMinutes = minutesUntilModelReady(samples);
-  const configPending = config.applied_version !== config.version;
+  const configPending = !!config && config.applied_version !== null && config.applied_version < config.version;
 
   const summary = useMemo(() => {
+    // 24 giờ: tính từ bản ghi phút gốc. Khoảng khác: từ các điểm biểu đồ có số đo (bỏ đoạn trống).
     if (range === "24h") return summarizeSamples(samples);
-    const values = data.map((point) => point.value);
-    return {
-      current: values.at(-1) ?? null,
-      average: values.reduce((total, value) => total + value, 0) / values.length,
-      highest: Math.max(...values),
-      lowest: Math.min(...data.map((point) => point.min ?? point.value)),
-      validMinutes: null,
-    };
+    const chart = summarizeChart(data);
+    if (!chart) return null;
+    return { ...chart, current: summarizeSamples(samples)?.current ?? chart.current, validMinutes: null };
   }, [data, range, samples]);
 
   const events = useMemo(
@@ -103,16 +109,24 @@ export function Spo2Monitor({
     <section className="card mt-8 p-6 sm:p-8">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-xl font-extrabold">Theo dõi SpO₂</h2>
+          <h2 className="flex items-center gap-2 text-xl font-extrabold">
+            Theo dõi SpO₂
+            {live && <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-bold text-green-700">● Trực tiếp</span>}
+          </h2>
           <p className="mt-1 text-sm text-[#5A7799]">
-            Vòng {status.device_id} · {transportLabels[status.transport]} · pin {status.battery}% · cập nhật {formatClock(status.ts)}
+            {status
+              ? `Vòng ${status.device_id} · ${transportLabels[status.transport]} · pin ${status.battery >= 0 ? `${status.battery}%` : "không rõ"} · lần cuối ${status.ts ? formatClock(status.ts) : "—"}`
+              : loading
+                ? "Đang tải dữ liệu vòng…"
+                : "Chưa có vòng nào cho bệnh nhân này."}
           </p>
+          {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
         </div>
         <div className="flex self-start rounded-xl border border-[#DDE8F4] bg-[#F1F6FB] p-1">
-          {ranges.map((item) => (
+          {WEARABLE_RANGES.map((item) => (
             <button
               key={item.id}
-              onClick={() => setRange(item.id)}
+              onClick={() => onRangeChange(item.id)}
               className={`rounded-lg px-5 py-2 text-sm ${range === item.id ? "bg-white font-bold text-[#173A5E] shadow-sm" : "text-[#5A7799]"}`}
             >
               {item.label}
@@ -121,19 +135,37 @@ export function Spo2Monitor({
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6">
+        <WearableConnectionBanner device={status} uploadIntervalMin={config?.upload_interval_min} loading={loading && !wearable} />
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-[#DDE8F4] bg-[#F8FBFE] p-5">
           <small className="text-[#5A7799]">Mức hiện tại</small>
-          <div className="mt-2">{latest ? <WearableLevelBadge level={latest.level} /> : <WearableLevelBadge level="UNKNOWN" />}</div>
-          <p className="mt-3 text-sm font-semibold text-[#173A5E]">
-            {latest ? assessmentTriggerLabels[latest.trigger] : "Chưa nhận dữ liệu từ vòng"}
-          </p>
-          {latest && <p className="mt-1 text-xs text-[#8BBCEC]">Đánh giá lúc {formatClock(latest.ts)}</p>}
+          {stale ? (
+            <>
+              <div className="mt-2"><WearableLevelBadge level="UNKNOWN" /></div>
+              <p className="mt-3 text-sm font-semibold text-red-700">Mất kết nối – không nhận được tín hiệu SpO₂</p>
+              {latest && (
+                <p className="mt-1 text-xs text-[#8BBCEC]">
+                  Đánh giá cuối lúc {formatClock(latest.ts)}: {wearableLevelStyles[latest.level].name}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="mt-2">{latest ? <WearableLevelBadge level={latest.level} /> : <WearableLevelBadge level="UNKNOWN" />}</div>
+              <p className="mt-3 text-sm font-semibold text-[#173A5E]">
+                {latest ? assessmentTriggerLabels[latest.trigger] : "Chưa nhận dữ liệu từ vòng"}
+              </p>
+              {latest && <p className="mt-1 text-xs text-[#8BBCEC]">Đánh giá lúc {formatClock(latest.ts)}</p>}
+            </>
+          )}
         </div>
 
         <div className="rounded-2xl border border-[#DDE8F4] bg-[#F8FBFE] p-5">
-          <small className="text-[#5A7799]">Nguy cơ SpO₂ &lt; {config.T}% trong 30 phút tới</small>
-          {config.ml_enabled && latestModelRun?.prob != null ? (
+          <small className="text-[#5A7799]">Nguy cơ SpO₂ &lt; {config?.T ?? "T"}% trong 30 phút tới</small>
+          {config?.ml_enabled && latestModelRun?.prob != null ? (
             <>
               <p className="mt-1 text-3xl font-extrabold text-[#173A5E]">{formatProb(latestModelRun.prob)}</p>
               <RiskBar prob={latestModelRun.prob} T={config.T} />
@@ -141,7 +173,7 @@ export function Spo2Monitor({
             </>
           ) : (
             <p className="mt-3 text-sm text-[#5A7799]">
-              {!config.ml_enabled
+              {config && !config.ml_enabled
                 ? "AI đang tắt, vòng chỉ cảnh báo theo luật."
                 : `AI cần ${MODEL_WINDOW_MIN} phút dữ liệu liên tục${waitMinutes > 0 ? `, còn ${waitMinutes} phút` : ""}. Luật ngưỡng vẫn hoạt động.`}
             </p>
@@ -150,42 +182,87 @@ export function Spo2Monitor({
 
         <div className="rounded-2xl border border-[#DDE8F4] bg-[#F8FBFE] p-5">
           <small className="text-[#5A7799]">SpO₂ · nhịp mạch</small>
-          <p className={`mt-1 text-3xl font-extrabold ${latest?.spo2_now != null && latest.spo2_now < config.T ? "text-red-500" : "text-[#173A5E]"}`}>
-            {formatSpo2(latest?.spo2_now ?? null)}
-            <span className="ml-2 text-base font-bold text-[#5A7799]">{latest?.pulse_now != null ? `${latest.pulse_now} nhịp/phút` : ""}</span>
-          </p>
+          {stale ? (
+            <>
+              <p className="mt-1 text-3xl font-extrabold text-[#9EB4CC]">—</p>
+              <p className="mt-1 text-xs font-semibold text-red-700">
+                Không nhận được SpO₂{reading ? ` · số cuối ${formatSpo2(reading.spo2)} lúc ${formatClockSeconds(reading.ts)}` : ""}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className={`mt-1 text-3xl font-extrabold ${reading?.spo2 != null && config && reading.spo2 < config.T ? "text-red-500" : "text-[#173A5E]"}`}>
+                {formatSpo2(reading?.spo2 ?? null)}
+                <span className="ml-2 text-base font-bold text-[#5A7799]">
+                  {reading?.pulse != null ? `${Math.round(reading.pulse)} nhịp/phút` : ""}
+                </span>
+              </p>
+              {reading && (
+                // Cùng giờ đo với app người nhà: hai bên đối chiếu được đúng một số.
+                <p className="mt-1 text-xs text-[#8BBCEC]">
+                  Đo lúc {formatClockSeconds(reading.ts)} ·{" "}
+                  {reading.source === "live" ? `trung bình ${LIVE_PERIOD_SECONDS} giây` : "trung bình 1 phút"}
+                </p>
+              )}
+            </>
+          )}
           <p className="mt-3 text-xs text-[#5A7799]">
             Mức nền 24 giờ: <b className="text-[#173A5E]">{formatSpo2(latest?.baseline ?? null)}</b>
             {latest && latest.base_hours < 24 && latest.baseline !== null ? ` (đủ ${Math.floor(latest.base_hours)} giờ)` : ""}
           </p>
-          <p className="mt-1 text-xs text-[#5A7799]">{status.worn ? "Đang đeo vòng" : "Vòng chưa được đeo"}</p>
+          <p className="mt-1 text-xs text-[#5A7799]">{status ? (status.worn ? "Đang đeo vòng" : "Vòng chưa được đeo") : "Chưa có vòng"}</p>
         </div>
 
         <div className="rounded-2xl border border-[#DDE8F4] bg-[#F8FBFE] p-5">
-          <small className="text-[#5A7799]">Ngưỡng đang áp dụng</small>
-          <p className="mt-1 text-3xl font-extrabold text-[#173A5E]">T = {config.T}%</p>
-          <ul className="mt-2 space-y-1 text-xs text-[#5A7799]">
-            <li>Cảnh báo theo luật: dưới T liên tục ≥ {RULE_EVENT_MIN} phút</li>
-            <li>Nguy hiểm: SpO₂ &lt; {config.critical.crit_T}% trong {config.critical.n_min} phút hoặc mạch ngoài {config.critical.hr_low}–{config.critical.hr_high}</li>
-            <li className={configPending ? "font-semibold text-amber-700" : ""}>
-              {configPending ? `Đang chờ vòng áp dụng cấu hình v${config.version}` : `Vòng đã áp dụng cấu hình v${config.version}`}
-            </li>
-            <li className="font-mono text-[11px] text-[#8BBCEC]">{status.model_version} · fw {status.fw}</li>
-          </ul>
+          <div className="flex items-start justify-between gap-2">
+            <small className="text-[#5A7799]">Ngưỡng theo dõi</small>
+            {!readOnly && (
+              <button type="button" onClick={() => setEditing(true)} className="text-xs font-bold text-[#2F78C8] hover:underline">
+                Sửa ngưỡng
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-3xl font-extrabold text-[#173A5E]">T = {config?.T ?? "—"}%</p>
+          {config && (
+            <ul className="mt-2 space-y-1 text-xs text-[#5A7799]">
+              <li>Cảnh báo theo luật: dưới T liên tục ≥ {RULE_EVENT_MIN} phút</li>
+              <li>
+                Nguy hiểm: SpO₂ &lt; {config.critical.crit_T}% trong {config.critical.n_min} phút
+                {config.critical.hr_low || config.critical.hr_high ? ` hoặc mạch ngoài ${config.critical.hr_low}–${config.critical.hr_high}` : ""}
+              </li>
+              <li className={configPending ? "font-semibold text-amber-700" : ""}>
+                {config.version === 0
+                  ? "Đang dùng ngưỡng mặc định (v0)"
+                  : config.applied_version === null
+                    ? `Cấu hình v${config.version} · chưa có vòng`
+                    : configPending
+                      ? `Đang chờ vòng áp dụng v${config.version} (vòng đang dùng v${config.applied_version})`
+                      : `Vòng đã áp dụng v${config.version}`}
+              </li>
+              {status && <li className="font-mono text-[11px] text-[#8BBCEC]">{status.model_version} · fw {status.fw}</li>}
+            </ul>
+          )}
         </div>
       </div>
 
       <div className="mt-10">
-        <Spo2Chart data={data} threshold={config.T} criticalThreshold={config.critical.crit_T} />
+        {hasChartData(data) ? (
+          <Spo2Chart data={data} range={range} threshold={config?.T} criticalThreshold={config?.critical.crit_T} />
+        ) : (
+          <div className="flex h-[340px] items-center justify-center rounded-2xl border border-dashed border-[#DDE8F4] text-sm text-[#5A7799]">
+            {loading ? "Đang tải…" : "Chưa có số đo SpO₂ trong khoảng này."}
+          </div>
+        )}
       </div>
       <p className="mt-2 text-xs text-[#5A7799]">
-        — SpO₂ trung bình &nbsp; <span className="text-[#7FB2E5]">- - thấp nhất</span> &nbsp; <i className="text-red-500">- - ngưỡng T</i>
-        {range !== "24h" && " · Dữ liệu 7/30 ngày là trung bình theo ngày"}
+        — {range === "6h" ? "SpO₂ từng phút" : "SpO₂ trung bình"} &nbsp;
+        {range !== "6h" && <span className="text-[#7FB2E5]">- - thấp nhất &nbsp;</span>}
+        <i className="text-red-500">- - ngưỡng T</i> · {RANGE_SPEC[range].note} · Đoạn trống: không có số đo (mất kết nối hoặc không đeo vòng)
       </p>
 
       <div className="mt-8 grid grid-cols-2 rounded-2xl border border-[#DDE8F4] bg-[#F2F7FD] py-6 text-center sm:grid-cols-4">
         {[
-          ["Hiện tại", summary?.current ?? null, "text-[#173A5E]"],
+          ["Hiện tại", stale ? null : (reading?.spo2 ?? summary?.current ?? null), "text-[#173A5E]"],
           ["Trung bình", summary?.average ?? null, "text-[#173A5E]"],
           ["Cao nhất", summary?.highest ?? null, "text-[#2F78C8]"],
           ["Thấp nhất", summary?.lowest ?? null, "text-red-500"],
@@ -229,6 +306,17 @@ export function Spo2Monitor({
           </table>
         )}
       </div>
+      <DeviceDiagnosticsPanel items={wearable?.diagnostics ?? []} />
+      {editing && (
+        <ThresholdEditor
+          patientId={patientId}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            onConfigSaved();
+          }}
+        />
+      )}
     </section>
   );
 }

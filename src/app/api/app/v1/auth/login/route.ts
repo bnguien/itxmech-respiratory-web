@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { appSessions, patientAppAccess } from "@/lib/db/schema/app-access";
 import { patients } from "@/lib/db/schema/patients";
 import { verifyAccessCode } from "@/lib/app-api/crypto";
-import { appError, readJsonObject } from "@/lib/app-api/http";
+import { appError, readJsonObject, withAppErrors } from "@/lib/app-api/http";
 import { claimBleGateway, currentDeviceOf, issueTokens } from "@/lib/app-api/server";
 import { validateLogin } from "@/lib/app-api/validation";
 
@@ -16,7 +16,7 @@ const LOCK_SECONDS = 15 * 60;
 const invalid = () => appError(401, "INVALID_CREDENTIALS", "Mã bệnh nhân hoặc mã truy cập không đúng.");
 
 /** Người nhà đăng nhập app bằng mã bệnh nhân + mã truy cập 6 số bác sĩ cấp. */
-export async function POST(request: NextRequest) {
+export const POST = withAppErrors("auth/login", async (request: NextRequest) => {
   const parsed = validateLogin(await readJsonObject(request));
   if (parsed.error !== undefined) return appError(400, "VALIDATION_ERROR", parsed.error);
   const input = parsed.data;
@@ -101,4 +101,4 @@ export async function POST(request: NextRequest) {
     console.error("[App API] login failed", error);
     return appError(500, "INTERNAL_ERROR", "Máy chủ đang gặp sự cố, thử lại sau.");
   }
-}
+});

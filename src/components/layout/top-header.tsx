@@ -13,7 +13,7 @@ import {
   User,
   X,
 } from "lucide-react";
-import { alerts } from "@/constants/mock-data";
+import { alertTime, useWearableAlerts } from "@/lib/alerts/use-wearable-alerts";
 import type { PatientListItem, PatientListResponse } from "@/types/patient";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { useDoctorProfile } from "@/components/auth/doctor-profile-context";
@@ -81,7 +81,7 @@ export function TopHeader() {
         ? "Chào buổi chiều"
         : "Chào buổi tối";
 
-  const unreadAlerts = alerts.filter((a) => a.unread);
+  const { unread: unreadAlerts } = useWearableAlerts();
   useEffect(() => {
     if (!searchOpen || !searchQuery.trim()) return;
     const controller = new AbortController();
@@ -261,28 +261,31 @@ export function TopHeader() {
               </div>
 
               <div className="mt-2 max-h-64 overflow-y-auto space-y-1.5">
-                {alerts.slice(0, 3).map((item) => (
+                {unreadAlerts.length === 0 && (
+                  <p className="px-1 py-4 text-center text-[11px] text-[#5A7799]">Không có cảnh báo mới.</p>
+                )}
+                {unreadAlerts.slice(0, 5).map((item) => (
                   <Link
                     key={item.id}
-                    href={`/patients/${item.patientId}`}
+                    href={`/patients/${item.patient_id}?tab=spo2`}
                     onClick={() => setNotifOpen(false)}
                     className="block rounded-xl border border-[#E7F1FB] bg-[#F8FAFD] p-2.5 transition hover:border-[#CCE2F7] hover:bg-[#F2F7FD]"
                   >
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1 text-[11px] font-bold text-[#173A5E]">
-                        {item.severity === "critical" ? (
+                        {item.level === "CRITICAL" ? (
                           <AlertTriangle size={13} className="text-red-500" />
                         ) : (
                           <Activity size={13} className="text-amber-500" />
                         )}
-                        {item.patientName}
+                        {item.patient_name}
                       </span>
                       <span className="text-[10px] text-[#5A7799]">
-                        {item.time}
+                        {alertTime(item.last_seen_at)}
                       </span>
                     </div>
                     <p className="mt-1 text-[11px] text-[#5A7799] line-clamp-2">
-                      {item.message}
+                      {item.summary}
                     </p>
                   </Link>
                 ))}

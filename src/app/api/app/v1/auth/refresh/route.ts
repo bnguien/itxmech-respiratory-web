@@ -3,11 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { appSessions } from "@/lib/db/schema/app-access";
 import { hashRefreshToken } from "@/lib/app-api/crypto";
-import { appError, readJsonObject } from "@/lib/app-api/http";
+import { appError, readJsonObject, withAppErrors } from "@/lib/app-api/http";
 import { issueTokens } from "@/lib/app-api/server";
 
 /** Đổi refresh token lấy cặp token mới (refresh token cũ hết hiệu lực ngay). */
-export async function POST(request: NextRequest) {
+export const POST = withAppErrors("auth/refresh", async (request: NextRequest) => {
   const body = await readJsonObject(request);
   const token = typeof body?.refresh_token === "string" ? body.refresh_token : "";
   if (!token) return appError(401, "UNAUTHORIZED", "Thiếu refresh token.");
@@ -44,4 +44,4 @@ export async function POST(request: NextRequest) {
     console.error("[App API] refresh failed", error);
     return appError(500, "INTERNAL_ERROR", "Máy chủ đang gặp sự cố.");
   }
-}
+});
