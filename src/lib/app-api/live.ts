@@ -30,6 +30,9 @@ const SUMMARY: Record<LiveLevel, string> = {
   CRITICAL: "SpO₂ rất thấp, cần liên hệ bác sĩ ngay.",
 };
 
+export const WARMING_UP_SUMMARY =
+  "Đang nhận số đo. AI cần đủ 60 phút dữ liệu liên tục để đánh giá nguy cơ; luật ngưỡng vẫn hoạt động.";
+
 export function liveLevel(
   latestVitalTs: string | null,
   latestAssessmentLevel: string | null,
@@ -70,7 +73,8 @@ export function buildLiveSnapshot(input: {
   const fresh = !!reading && isReadingFresh(connection.kind);
   const level = (input.assessmentLevel ?? "NORMAL") as LiveLevel;
   const state: LiveLevel = fresh && level in RISK ? level : "UNKNOWN";
-  let summary = SUMMARY[state];
+  // Đang nhận số nhưng chưa có mức (60 phút đầu, model chưa đủ cửa sổ): không phải "chưa nhận được dữ liệu".
+  let summary = fresh && state === "UNKNOWN" ? WARMING_UP_SUMMARY : SUMMARY[state];
   if (!fresh && input.device) summary = `${connection.title}. ${connection.detail}`;
   else if (connection.kind === "wifi") summary = `${summary} Vòng đang tự gửi qua WiFi dự phòng nên số liệu cập nhật mỗi vài phút.`;
   else if (connection.kind === "not_worn") summary = connection.detail;

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
-import { buildLiveSnapshot } from "@/lib/app-api/live";
+import { buildLiveSnapshot, WARMING_UP_SUMMARY } from "@/lib/app-api/live";
 import { validateDiagnostics, validateLive } from "@/lib/app-api/validation";
 import { formatClockSeconds, pickCurrentReading, summarizeDiagnostics } from "@/lib/wearable/presentation";
 import type { DeviceDiagnostic } from "@/types/wearable";
@@ -33,6 +33,17 @@ describe("số hiện tại giống nhau ở mọi máy", () => {
     });
     expect(s).toMatchObject({ state: "WATCH", fresh: true, reading: { spo2: 95, ts: NOW - 5 } });
     expect(s.connection.kind).toBe("live");
+  });
+
+  it("60 phút đầu (chưa có mức) mà đang nhận số: không ghi \"chưa nhận được dữ liệu\"", () => {
+    const s = buildLiveSnapshot({
+      live: live(NOW - 5, 88.1),
+      minute: minute(NOW - 90, 88),
+      assessmentLevel: "UNKNOWN",
+      device: { ts: NOW - 5, transport: "ble_relay", worn: true },
+      nowSeconds: NOW,
+    });
+    expect(s).toMatchObject({ state: "UNKNOWN", fresh: true, summary: WARMING_UP_SUMMARY });
   });
 
   it("mất kết nối: không giữ mức Bình thường cũ, nói rõ không nhận được SpO₂", () => {

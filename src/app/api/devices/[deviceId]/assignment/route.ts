@@ -7,13 +7,17 @@ import { apiError, authorizeDoctor } from "@/lib/patients/server";
 type Context = { params: Promise<{ deviceId: string }> };
 const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{3,40}$/;
 
-/** Gỡ vòng khỏi bệnh nhân hiện tại; lần gửi tiếp theo từ app có thể tự gán vòng cho bệnh nhân mới. */
+/**
+ * Gỡ vòng khỏi bệnh nhân đang gán (bác sĩ). Lần gửi kế tiếp từ app của bệnh nhân mới sẽ tự gán vòng
+ * (ensureDeviceForPatient), thay vì bị chặn `403 WRONG_DEVICE`.
+ * Xóa luôn khóa thiết bị (vòng thôi tự gửi qua WiFi bằng khóa cũ) và số 15 giây cuối (`GET /live` đọc theo
+ * device_id, không xóa thì người mới thấy SpO₂ của người cũ cho tới gói kế tiếp).
+ */
 export async function DELETE(_request: NextRequest, { params }: Context) {
   const auth = await authorizeDoctor();
   if (auth.response) return auth.response;
   const { deviceId } = await params;
   if (!DEVICE_ID_PATTERN.test(deviceId)) return apiError(404, "NOT_FOUND", "Không tìm thấy vòng.");
-
   try {
     const now = new Date().toISOString();
     const closed = await db.transaction(async (tx) => {
