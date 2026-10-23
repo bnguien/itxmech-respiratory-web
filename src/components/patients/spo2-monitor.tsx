@@ -216,7 +216,7 @@ export function Spo2Monitor({
         <div className="rounded-2xl border border-[#DDE8F4] bg-[#F8FBFE] p-5">
           <div className="flex items-start justify-between gap-2">
             <small className="text-[#5A7799]">Ngưỡng theo dõi</small>
-            {!readOnly && config && (
+            {!readOnly && (
               <button type="button" onClick={() => setEditing(true)} className="text-xs font-bold text-[#2F78C8] hover:underline">
                 Sửa ngưỡng
               </button>
@@ -307,7 +307,7 @@ export function Spo2Monitor({
         )}
       </div>
       <DeviceDiagnosticsPanel items={wearable?.diagnostics ?? []} />
-      {editing && config && (
+      {editing && (
         <ThresholdEditor
           patientId={patientId}
           onClose={() => setEditing(false)}

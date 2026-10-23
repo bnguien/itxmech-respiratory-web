@@ -15,6 +15,9 @@ import {
 } from "@/lib/patients/server";
 import { validatePatientInput } from "@/lib/patients/validation";
 import { issueAppAccessCode } from "@/lib/app-api/server";
+import { monitoringConfigs } from "@/lib/db/schema/monitoring-configs";
+import { validateThresholds, type MonitoringThresholds } from "@/lib/monitoring/config";
+import { thresholdColumns } from "@/lib/monitoring/server";
 
 export async function GET(request: NextRequest) {
   const requestStartedAt = performance.now();
@@ -110,6 +113,17 @@ export async function POST(request: NextRequest) {
       { field: "body", message: "Dữ liệu JSON không hợp lệ." },
     ]);
   }
+  // Ngưỡng SpO₂ đặt ngay lúc tạo hồ sơ (không bắt buộc), lưu thành v1. Tách khỏi phần hồ sơ trước khi kiểm tra.
+  let monitoring: MonitoringThresholds | null = null;
+  if (body && typeof body === "object" && !Array.isArray(body) && "monitoring" in body) {
+    const { monitoring: rawMonitoring, ...rest } = body as Record<string, unknown>;
+    body = rest;
+    if (rawMonitoring != null) {
+      const checked = validateThresholds(rawMonitoring);
+      if (checked.error !== undefined) return validationError([{ field: "monitoring", message: checked.error }]);
+      monitoring = checked.data;
+    }
+  }
   const result = validatePatientInput(body);
   if (!result.data) return validationError(result.issues);
   const input = result.data;
@@ -129,6 +143,16 @@ export async function POST(request: NextRequest) {
           createdBy: auth.doctorId,
         })
         .returning(patientDetailSelection);
+      if (monitoring) {
+        await tx.insert(monitoringConfigs).values({
+          patientId: row.id,
+          version: 1,
+          preset: "custom",
+          ...thresholdColumns(monitoring),
+          note: null,
+          setBy: auth.doctorId,
+        });
+      }
       return { created: row, accessCode: await issueAppAccessCode(row.id, tx) };
     });
     return NextResponse.json(
