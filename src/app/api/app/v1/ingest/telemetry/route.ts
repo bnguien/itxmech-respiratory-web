@@ -2,8 +2,9 @@ import { eq, sql } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { vitalsMinute, wearableDevices } from "@/lib/db/schema/wearables";
-import { appError, epochToIso, readJsonObject } from "@/lib/app-api/http";
-import { authorizeApp, ensureDeviceForPatient } from "@/lib/app-api/server";
+import { appError, epochToIso, readJsonObject, withAppErrors } from "@/lib/app-api/http";
+import { authorizeIngest, ensureDeviceForPatient } from "@/lib/app-api/server";
+import { latestConfigVersion } from "@/lib/monitoring/server";
 import { validateTelemetry } from "@/lib/app-api/validation";
 
 /**
@@ -11,13 +12,17 @@ import { validateTelemetry } from "@/lib/app-api/validation";
  * acked_seq = seq lớn nhất trong lô: mọi bản ghi hợp lệ đã có trong DB sau lệnh này; bản ghi chưa có giờ
  * thật (vòng chưa đồng bộ giờ) bị bỏ hẳn, vẫn tính vào acked_seq để app không gửi lại mãi.
  */
-export async function POST(request: NextRequest) {
-  const auth = await authorizeApp(request);
+export const POST = withAppErrors("ingest/telemetry", async (request: NextRequest) => {
+  const auth = await authorizeIngest(request);
   if (auth.response) return auth.response;
   const parsed = validateTelemetry(await readJsonObject(request));
   if (parsed.error !== undefined) return appError(400, "VALIDATION_ERROR", parsed.error);
   const input = parsed.data;
 
+  // Vòng tự gửi qua WiFi chỉ được gửi dữ liệu của chính nó.
+  if (auth.via === "device" && input.device_id !== auth.deviceId) {
+    return appError(403, "WRONG_DEVICE", "device_id không khớp khóa thiết bị.");
+  }
   const owner = await ensureDeviceForPatient(input.device_id, auth.patientId);
   if (!owner.ok) return owner.response;
 
@@ -62,7 +67,7 @@ export async function POST(request: NextRequest) {
     accepted,
     duplicates: input.samples.length - accepted,
     acked_seq: Math.max(ackedSeq, 0),
-    config_version_latest: 0,
+    config_version_latest: await latestConfigVersion(auth.patientId),
     server_time: Math.floor(Date.now() / 1000),
   });
-}
+});

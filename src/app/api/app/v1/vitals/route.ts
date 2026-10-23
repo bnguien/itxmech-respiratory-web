@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { appError } from "@/lib/app-api/http";
+import { appError, withAppErrors } from "@/lib/app-api/http";
 import { authorizeApp } from "@/lib/app-api/server";
 import { parseVitalsRange } from "@/lib/app-api/validation";
 
@@ -14,7 +14,7 @@ type BucketRow = {
 };
 
 /** Lịch sử SpO₂: gộp bản ghi phút theo 1m / 5m / 1h. */
-export async function GET(request: NextRequest) {
+export const GET = withAppErrors("vitals", async (request: NextRequest) => {
   const auth = await authorizeApp(request);
   if (auth.response) return auth.response;
   const params = request.nextUrl.searchParams;
@@ -44,4 +44,4 @@ export async function GET(request: NextRequest) {
       pulse_mean: row.pulse_mean,
     })),
   });
-}
+});

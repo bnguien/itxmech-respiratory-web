@@ -6,6 +6,8 @@ import { MobileHeader } from "./mobile-header";
 import { TopHeader } from "./top-header";
 import { DoctorPanel } from "./doctor-panel";
 import { DoctorProfileProvider } from "@/components/auth/doctor-profile-context";
+import { CriticalAlertCards } from "@/components/alerts/critical-alert-cards";
+import { WearableAlertsProvider } from "@/lib/alerts/use-wearable-alerts";
 import type { AuthenticatedDoctor } from "@/types/auth";
 
 export function AppShell({
@@ -19,6 +21,7 @@ export function AppShell({
   const pathname = usePathname();
   return (
     <DoctorProfileProvider doctor={doctor}>
+      <WearableAlertsProvider>
       <div className="flex h-screen w-full flex-col overflow-hidden bg-white">
         <MobileHeader onMenu={() => setOpen(true)} />
         <div className="flex min-h-0 flex-1">
@@ -39,6 +42,7 @@ export function AppShell({
           )}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
             <TopHeader />
+            <CriticalAlertCards />
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <main className="min-w-0 flex-1 overflow-y-auto bg-white">
                 {children}
@@ -48,6 +52,7 @@ export function AppShell({
           </div>
         </div>
       </div>
+      </WearableAlertsProvider>
     </DoctorProfileProvider>
   );
 }

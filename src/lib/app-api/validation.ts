@@ -214,6 +214,107 @@ export function validateStatus(body: unknown): Result<StatusInput> {
   };
 }
 
+export interface LiveInput {
+  device_id: string;
+  ts: number;
+  spo2: number | null;
+  spo2_min: number | null;
+  pulse: number | null;
+  /** 0–1 */
+  sqi: number | null;
+  /** tỷ lệ giây hợp lệ trong cửa sổ, 0–1 */
+  valid: number;
+  worn: boolean;
+}
+
+/** Số hiển thị 15 giây (LIVE v2) app gateway chuyển tiếp. Chưa có giờ thật thì từ chối (không có "đo lúc"). */
+export function validateLive(body: unknown): Result<LiveInput> {
+  if (!isObject(body)) return { error: "Thiếu dữ liệu." };
+  if (typeof body.device_id !== "string" || !DEVICE_ID_PATTERN.test(body.device_id)) {
+    return { error: "device_id không hợp lệ." };
+  }
+  if (!isInt(body.ts) || body.ts < MIN_TS) return { error: "ts phải là epoch giây (vòng đã đồng bộ giờ)." };
+  const spo2 = optNum(body.spo2), min = optNum(body.spo2_min), pulse = optNum(body.pulse), sqi = optNum(body.sqi);
+  if (spo2 === undefined || min === undefined || pulse === undefined || sqi === undefined || !isNum(body.valid)) {
+    return { error: "spo2, spo2_min, pulse, sqi, valid phải là số hoặc null." };
+  }
+  const clamp01 = (v: number) => Math.min(Math.max(v, 0), 1);
+  return {
+    data: {
+      device_id: body.device_id,
+      ts: body.ts,
+      spo2,
+      spo2_min: min,
+      pulse,
+      sqi: sqi === null ? null : clamp01(sqi),
+      valid: clamp01(body.valid),
+      worn: body.worn === true,
+    },
+  };
+}
+
+const RESET_REASONS = [
+  "UNKNOWN", "POWERON", "EXT", "SW", "PANIC", "INT_WDT", "TASK_WDT", "WDT",
+  "DEEPSLEEP", "BROWNOUT", "SDIO", "USB", "JTAG", "EFUSE", "PWR_GLITCH", "CPU_LOCKUP",
+] as const;
+const MAX_DIAG_BATCH = 48;
+
+export interface DiagnosticItemInput {
+  ts: number;
+  uptime_s: number;
+  boot_id: number;
+  cpu_avg_pct: number | null;
+  cpu_peak_pct: number | null;
+  model_ms: number | null;
+  minute_ms: number | null;
+  flash_ms: number | null;
+  heap_min_kb: number | null;
+  wifi_s: number | null;
+  reset_reason: string;
+  ble_drops: number | null;
+}
+
+/**
+ * Số liệu hiệu năng (DIAG, ble-gatt.md mục 3.9), từ app chuyển tiếp hoặc vòng tự gửi qua WiFi.
+ * Mục ghi lúc vòng chưa có giờ (ts nhỏ) vẫn nhận: dùng giờ server nhận thay cho ts.
+ */
+export function validateDiagnostics(
+  body: unknown,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): Result<{ device_id: string; transport: "ble_relay" | "wifi"; items: DiagnosticItemInput[] }> {
+  if (!isObject(body)) return { error: "Thiếu dữ liệu." };
+  if (typeof body.device_id !== "string" || !DEVICE_ID_PATTERN.test(body.device_id)) {
+    return { error: "device_id không hợp lệ." };
+  }
+  if (!Array.isArray(body.items) || body.items.length > MAX_DIAG_BATCH) {
+    return { error: `items phải là mảng tối đa ${MAX_DIAG_BATCH} phần tử.` };
+  }
+  const items: DiagnosticItemInput[] = [];
+  const small = (v: unknown) => (isInt(v) && v >= 0 && v <= 32767 ? v : null);
+  const num = (v: unknown) => (isNum(v) && v >= 0 ? v : null);
+  for (const d of body.items) {
+    if (!isObject(d) || !isInt(d.uptime_s) || d.uptime_s < 0 || !isInt(d.boot_id) || d.boot_id < 0 || !isInt(d.ts)) {
+      return { error: "Mục DIAG thiếu ts, uptime_s hoặc boot_id." };
+    }
+    const reason = typeof d.reset_reason === "string" ? d.reset_reason.toUpperCase() : "UNKNOWN";
+    items.push({
+      ts: d.ts < MIN_TS ? nowSeconds : d.ts,
+      uptime_s: d.uptime_s,
+      boot_id: d.boot_id,
+      cpu_avg_pct: num(d.cpu_avg_pct),
+      cpu_peak_pct: num(d.cpu_peak_pct),
+      model_ms: num(d.model_ms),
+      minute_ms: num(d.minute_ms),
+      flash_ms: num(d.flash_ms),
+      heap_min_kb: small(d.heap_min_kb),
+      wifi_s: small(d.wifi_s),
+      reset_reason: (RESET_REASONS as readonly string[]).includes(reason) ? reason : "UNKNOWN",
+      ble_drops: small(d.ble_drops),
+    });
+  }
+  return { data: { device_id: body.device_id, transport: body.transport === "wifi" ? "wifi" : "ble_relay", items } };
+}
+
 export function validateConfigAck(body: unknown): Result<{ device_id: string; config_version: number; status: string }> {
   if (!isObject(body)) return { error: "Thiếu dữ liệu." };
   if (typeof body.device_id !== "string" || !DEVICE_ID_PATTERN.test(body.device_id) || !isInt(body.config_version)) {

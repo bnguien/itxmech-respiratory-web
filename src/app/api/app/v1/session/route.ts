@@ -2,11 +2,11 @@ import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { appSessions } from "@/lib/db/schema/app-access";
-import { appError, readJsonObject } from "@/lib/app-api/http";
+import { appError, readJsonObject, withAppErrors } from "@/lib/app-api/http";
 import { authorizeApp, claimBleGateway } from "@/lib/app-api/server";
 
 /** Đổi vai trò gateway BLE hoặc cập nhật FCM token của máy này. */
-export async function PATCH(request: NextRequest) {
+export const PATCH = withAppErrors("session", async (request: NextRequest) => {
   const auth = await authorizeApp(request);
   if (auth.response) return auth.response;
   const body = await readJsonObject(request);
@@ -22,4 +22,4 @@ export async function PATCH(request: NextRequest) {
     if (set.isBleGateway) await claimBleGateway(auth.patientId, auth.sessionId, tx);
   });
   return new Response(null, { status: 204 });
-}
+});

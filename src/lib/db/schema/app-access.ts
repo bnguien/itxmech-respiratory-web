@@ -19,6 +19,8 @@ export const patientAppAccess = pgTable(
       .primaryKey()
       .references(() => patients.id, { onDelete: "cascade" }),
     accessCodeHash: text("access_code_hash").notNull(),
+    /** Mã truy cập mã hóa AES-GCM để bác sĩ xem / in lại phiếu đăng nhập (null với mã cấp trước migration 0012). */
+    accessCodeEnc: text("access_code_enc"),
     failedAttempts: integer("failed_attempts").default(0).notNull(),
     lockedUntil: timestamp("locked_until", { withTimezone: true, mode: "string" }),
     rotatedAt: timestamp("rotated_at", { withTimezone: true, mode: "string" })
