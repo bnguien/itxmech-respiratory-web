@@ -16,11 +16,22 @@ export function PatientAppAccessCard({ patientId, patientName }: { patientId: st
   const [rotating, setRotating] = useState(false);
   const [shown, setShown] = useState<{ credentials: AppAccessCredentials; rotated: boolean } | null>(null);
 
+  const [loading, setLoading] = useState(true);
+
+  // Tải lỗi (mất mạng, server bận) thì cho tải lại, không gợi ý cấp mã mới: mã cũ vẫn còn và xem lại được.
   const load = useCallback(async () => {
-    const response = await fetch(`/api/patients/${patientId}/app-access`, { cache: "no-store" });
-    const payload = (await response.json()) as { data?: PatientAppAccessStatus; error?: { message?: string } };
-    if (!response.ok || !payload.data) setError(payload.error?.message || "Không thể tải thông tin đăng nhập app.");
-    else setStatus(payload.data);
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/patients/${patientId}/app-access`, { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as { data?: PatientAppAccessStatus; error?: { message?: string } };
+      if (!response.ok || !payload.data) throw new Error(payload.error?.message || "Không thể tải thông tin đăng nhập app.");
+      setStatus(payload.data);
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Không thể tải thông tin đăng nhập app.");
+    } finally {
+      setLoading(false);
+    }
   }, [patientId]);
 
   useEffect(() => {
@@ -62,13 +73,20 @@ export function PatientAppAccessCard({ patientId, patientName }: { patientId: st
                   ? `Mã bệnh nhân ${status.patient_code} · ${
                       code ? `mã truy cập ${code}` : status.has_access_code ? "mã cũ chưa lưu phiếu, cần cấp mã mới để in" : "chưa có mã truy cập"
                     } · ${status.active_sessions} máy đang đăng nhập`
-                  : "Đang tải..."}
+                  : loading
+                    ? "Đang tải..."
+                    : "Chưa tải được thông tin phiếu. Bấm Tải lại để thử lại."}
               </p>
             </div>
           </div>
-          {!confirming ? (
+          {!status ? (
+            <button type="button" onClick={() => void load()} disabled={loading} className="btn-secondary self-start">
+              <RefreshCw size={15} />
+              {loading ? "Đang tải..." : "Tải lại"}
+            </button>
+          ) : !confirming ? (
             <div className="flex flex-wrap gap-2 self-start">
-              {status && code && (
+              {code && (
                 <button
                   type="button"
                   onClick={() => setShown({ credentials: { patient_code: status.patient_code, access_code: code }, rotated: false })}
