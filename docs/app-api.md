@@ -79,7 +79,7 @@ Bản ghi có `ts < 1 600 000 000` (vòng chưa đồng bộ giờ) bị bỏ nh
 
 ## Cài đặt
 
-1. Thêm `APP_JWT_SECRET`, `DATABASE_URL` (transaction pooler, cổng 6543) và `FIREBASE_SERVICE_ACCOUNT_JSON` vào
+1. Thêm `APP_JWT_SECRET`, `DATABASE_URL` (transaction pooler, cổng 6543), `DIRECT_DATABASE_URL` (session pooler, cổng 5432, dùng cho migration) và `FIREBASE_SERVICE_ACCOUNT_JSON` vào
    `.env.local` và biến môi trường của bản deploy (xem `.env.example`).
 2. Chạy migration `drizzle/0010_app_access_and_wearables.sql` đến `drizzle/0013_wearable_alerts.sql` theo quy trình migration hiện có
    (`npx drizzle-kit migrate`). Migration tạo `patient_app_access`, `app_sessions`, `wearable_devices`,

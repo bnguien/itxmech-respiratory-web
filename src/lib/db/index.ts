@@ -3,17 +3,12 @@ import "server-only";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-// Server dùng Supabase transaction pooler (cổng 6543): nhiều tiến trình / máy chạy cùng lúc không vượt
-// giới hạn 15 kết nối của session pooler (lỗi EMAXCONNSESSION). DIRECT_DATABASE_URL (cổng 5432) chỉ để
-// drizzle-kit chạy migration; còn thiếu DATABASE_URL thì tạm dùng nó như trước.
+// Runtime ưu tiên transaction pooler (6543); session pooler (5432) dành cho migration.
+// Nếu chưa cấu hình DATABASE_URL, giới hạn fallback ở một kết nối mỗi tiến trình.
 const databaseUrl = process.env.DATABASE_URL || process.env.DIRECT_DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL (hoặc DIRECT_DATABASE_URL) chưa được cấu hình.");
-}
-
-if (!process.env.DATABASE_URL && process.env.NODE_ENV !== "test") {
-  console.warn("[db] Chưa có DATABASE_URL, đang dùng DIRECT_DATABASE_URL (session pooler, tối đa 15 kết nối).");
 }
 
 const globalForDatabase = globalThis as unknown as {
@@ -23,8 +18,8 @@ const globalForDatabase = globalThis as unknown as {
 const sql =
   globalForDatabase.patientSql ??
   postgres(databaseUrl, {
-    max: 5,
-    prepare: false, // transaction pooler không giữ prepared statement giữa các request
+    max: process.env.DATABASE_URL ? 5 : 1,
+    prepare: false, // tương thích cả session pooler và transaction pooler
     idle_timeout: 20,
     connect_timeout: 10,
   });

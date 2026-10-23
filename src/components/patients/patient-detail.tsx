@@ -318,8 +318,8 @@ export function PatientDetail({
           </div>
         </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex min-w-[390px] items-center rounded-3xl border border-[#CCE2F7] bg-[#F2F7FD] px-7 py-6">
-            <div className="flex-1 border-r border-[#CCE2F7]">
+          <div className="flex w-full items-center rounded-3xl border border-[#CCE2F7] bg-[#F2F7FD] px-7 py-6 sm:min-w-[480px]">
+            <div className="min-w-0 flex-1 border-r border-[#CCE2F7]">
               <span className="text-xs uppercase tracking-wide text-[#5A7799]">
                 SpO₂ hiện tại
               </span>
@@ -327,14 +327,14 @@ export function PatientDetail({
                 // Mất kết nối: không giữ mức "Bình thường" cũ, nói rõ không nhận được SpO₂.
                 <p className="mt-1 text-4xl font-extrabold text-[#9EB4CC]">
                   —{" "}
-                  <small className="text-sm text-red-600">Mất tín hiệu SpO₂</small>
+                   <small className="whitespace-nowrap text-sm text-red-600">Mất tín hiệu SpO₂</small>
                 </p>
               ) : (
                 <p className={`mt-1 text-4xl font-extrabold ${hasWearableData ? latestLevelStyle.text : "text-[#5A7799]"}`}>
                   {hasWearableData
                     ? formatSpo2(current?.reading?.spo2 ?? latestSampleSpo2 ?? latestAssessment?.spo2_now ?? null)
                     : "—"}{" "}
-                  <small className="text-sm">
+                   <small className="whitespace-nowrap text-sm">
                     {hasWearableData ? latestLevelStyle.name : "Chưa có dữ liệu"}
                   </small>
                 </p>

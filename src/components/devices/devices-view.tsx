@@ -32,7 +32,26 @@ const toneStyles = {
 export function DevicesView() {
   const [devices, setDevices] = useState<DeviceRow[] | null>(null);
   const [error, setError] = useState("");
+  const [unassigning, setUnassigning] = useState<string | null>(null);
   const now = useNowSeconds();
+
+  const unassign = async (deviceId: string, patientName: string | null) => {
+    if (!window.confirm(`Gỡ vòng ${deviceId} khỏi ${patientName ?? "bệnh nhân"}? Vòng sẽ gán cho bệnh nhân kế tiếp kết nối qua app.`)) return;
+    setUnassigning(deviceId);
+    setError("");
+    try {
+      const response = await fetch(`/api/devices/${encodeURIComponent(deviceId)}/assignment`, { method: "DELETE" });
+      const payload = (await response.json()) as { error?: { message?: string } };
+      if (!response.ok) throw new Error(payload.error?.message || "Không thể gỡ vòng.");
+      setDevices((list) =>
+        list?.map((d) => (d.device_id === deviceId ? { ...d, patient_id: null, patient_name: null, patient_code: null } : d)) ?? null,
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Không thể gỡ vòng.");
+    } finally {
+      setUnassigning(null);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -95,12 +114,22 @@ export function DevicesView() {
                 </div>
                 <div className="min-w-0">
                   {d.patient_id ? (
-                    <Link
-                      href={`/patients/${d.patient_id}?tab=spo2`}
-                      className="block truncate text-xs font-bold text-[#173A5E] transition hover:text-[#2F78C8]"
-                    >
-                      {d.patient_name} <span className="font-mono font-normal text-[#5A7799]">{d.patient_code}</span>
-                    </Link>
+                    <>
+                      <Link
+                        href={`/patients/${d.patient_id}?tab=spo2`}
+                        className="block truncate text-xs font-bold text-[#173A5E] transition hover:text-[#2F78C8]"
+                      >
+                        {d.patient_name} <span className="font-mono font-normal text-[#5A7799]">{d.patient_code}</span>
+                      </Link>
+                      <button
+                        type="button"
+                        disabled={unassigning === d.device_id}
+                        onClick={() => void unassign(d.device_id, d.patient_name)}
+                        className="mt-1 text-[11px] font-bold text-red-600 hover:underline disabled:opacity-50"
+                      >
+                        {unassigning === d.device_id ? "Đang gỡ…" : "Gỡ khỏi bệnh nhân"}
+                      </button>
+                    </>
                   ) : (
                     <span className="text-xs text-[#5A7799]">Chưa gán</span>
                   )}
