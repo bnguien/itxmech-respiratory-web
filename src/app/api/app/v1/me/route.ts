@@ -3,11 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { doctorProfiles } from "@/lib/db/schema/doctor-profiles";
 import { patients } from "@/lib/db/schema/patients";
-import { appError } from "@/lib/app-api/http";
+import { appError, withAppErrors } from "@/lib/app-api/http";
 import { authorizeApp, currentDeviceOf } from "@/lib/app-api/server";
 
 /** Hồ sơ bệnh nhân cho thẻ trên app. */
-export async function GET(request: NextRequest) {
+export const GET = withAppErrors("me", async (request: NextRequest) => {
   const auth = await authorizeApp(request);
   if (auth.response) return auth.response;
 
@@ -41,4 +41,4 @@ export async function GET(request: NextRequest) {
       ? { device_id: device.deviceId, battery_pct: device.batteryPct, last_seen_at: device.lastSeenAt }
       : null,
   });
-}
+});

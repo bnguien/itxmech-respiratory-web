@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
+import { pushToPatient } from "@/lib/push/fcm";
 import { db } from "@/lib/db";
 import { patients } from "@/lib/db/schema/patients";
 import { currentDeviceOf } from "@/lib/app-api/server";
@@ -89,6 +90,9 @@ export async function PUT(request: NextRequest, { params }: Context) {
     const preset = typeof body.preset === "string" ? body.preset.slice(0, 40) : "custom";
     const note = typeof body.note === "string" ? body.note.trim().slice(0, 500) || null : null;
     await createConfig(id, auth.doctorId, result.data, preset, note);
+    // App đang nối vòng tải ngưỡng mới ngay và ghi xuống vòng qua BLE, không chờ lần gửi telemetry kế tiếp.
+    // Vòng đang chạy WiFi sẽ tự lấy ở lượt WiFi sau (GET device/config).
+    after(() => pushToPatient(id, { type: "config_changed" }));
     return NextResponse.json({ data: await payload(id) });
   } catch (error) {
     console.error("Unable to save monitoring config", error);

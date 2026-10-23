@@ -2,12 +2,12 @@ import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { wearableDevices } from "@/lib/db/schema/wearables";
-import { appError, readJsonObject } from "@/lib/app-api/http";
+import { appError, readJsonObject, withAppErrors } from "@/lib/app-api/http";
 import { authorizeIngest, ensureDeviceForPatient } from "@/lib/app-api/server";
 import { validateConfigAck } from "@/lib/app-api/validation";
 
 /** Vòng đã áp dụng (hoặc từ chối) một version config, app báo thay vòng. */
-export async function POST(request: NextRequest) {
+export const POST = withAppErrors("ingest/config-ack", async (request: NextRequest) => {
   const auth = await authorizeIngest(request);
   if (auth.response) return auth.response;
   const parsed = validateConfigAck(await readJsonObject(request));
@@ -29,4 +29,4 @@ export async function POST(request: NextRequest) {
     })
     .where(eq(wearableDevices.deviceId, ack.device_id));
   return new Response(null, { status: 204 });
-}
+});

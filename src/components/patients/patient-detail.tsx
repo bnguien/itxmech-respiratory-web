@@ -18,17 +18,13 @@ import { AudioWaveform } from "@/components/recordings/audio-waveform";
 import { usePatientWearable } from "@/lib/wearable/use-patient-wearable";
 import { assessmentTriggerLabels, formatClock, formatSpo2, wearableLevelStyles } from "@/lib/wearable/presentation";
 import { Spo2Monitor } from "./spo2-monitor";
+import { WearableConnectionBanner, useCurrentReading } from "./wearable-connection";
+import { RANGE_SPEC, WEARABLE_RANGES, hasChartData, summarizeChart, type WearableRange } from "@/lib/wearable/chart";
 import { VisitHistory } from "./visit-history";
 import { PatientRecordingsList } from "@/components/recordings/patient-recordings-list";
 import { CycleLabelBadge, SoundLabel } from "@/components/ui/status-badge";
 import { legacyCycleLabel } from "@/lib/recordings/presentation";
 
-type Spo2Range = "24h" | "7d" | "30d";
-const spo2Ranges: Array<{ id: Spo2Range; label: string }> = [
-  { id: "24h", label: "24 giờ" },
-  { id: "7d", label: "7 ngày" },
-  { id: "30d", label: "30 ngày" },
-];
 
 const tabs = [
   ["overview", "Tổng quan"],
@@ -105,9 +101,10 @@ export function PatientDetail({
   const [tab, setTab] = useState<PatientTab>(
     isPatientTab(requestedTab) ? requestedTab : "overview",
   );
-  const [spo2Range, setSpo2Range] = useState<Spo2Range>("24h");
+  const [spo2Range, setSpo2Range] = useState<WearableRange>("24h");
   // SpO₂ thật của bệnh nhân (vòng → app → server), dùng chung cho tab Tổng quan và tab SpO₂.
   const wearable = usePatientWearable(patient.id, spo2Range);
+  const current = useCurrentReading(wearable.data);
   const currentSpo2Data = useMemo(() => wearable.data?.chart ?? [], [wearable.data]);
   const wearableConfig = wearable.data?.config;
   const wearableAssessments = wearable.data?.assessments ?? [];
@@ -118,7 +115,6 @@ export function PatientDetail({
     (item) => item.notify.watch || item.notify.alert || item.notify.critical,
   );
   const latestLevelStyle = wearableLevelStyles[latestAssessment?.level ?? "UNKNOWN"];
-  const isNguyenVanA = patient.code === "PAT-000024" && patient.name === "Nguyễn Văn A";
 
   // Lời dặn lưu ở server (bảng doctor_notes), người nhà đọc trên app. Triệu chứng ban đầu lấy từ hồ sơ, chỉ hiện trên web.
   const [savedNotes, setSavedNotes] = useState<PatientNote[]>([]);
@@ -236,11 +232,11 @@ export function PatientDetail({
   };
 
   const spo2Summary = useMemo(() => {
-    const values = currentSpo2Data.map((point) => point.value);
+    const chart = summarizeChart(currentSpo2Data);
     return {
-      current: latestSampleSpo2 ?? values.at(-1) ?? null,
-      average: values.length ? values.reduce((total, val) => total + val, 0) / values.length : null,
-      lowest: values.length ? Math.min(...currentSpo2Data.map((point) => point.min ?? point.value)) : null,
+      current: latestSampleSpo2 ?? chart?.current ?? null,
+      average: chart?.average ?? null,
+      lowest: chart?.lowest ?? null,
     };
   }, [currentSpo2Data, latestSampleSpo2]);
 
@@ -327,21 +323,30 @@ export function PatientDetail({
               <span className="text-xs uppercase tracking-wide text-[#5A7799]">
                 SpO₂ hiện tại
               </span>
-              <p className={`mt-1 text-4xl font-extrabold ${isNguyenVanA ? "text-[#22C55E]" : hasWearableData ? latestLevelStyle.text : "text-[#5A7799]"}`}>
-                {isNguyenVanA ? "95%" : hasWearableData ? formatSpo2(latestSampleSpo2 ?? latestAssessment?.spo2_now ?? null) : "—"}{" "}
-                <small className="text-sm">
-                  {isNguyenVanA ? "Bình thường" : hasWearableData ? latestLevelStyle.name : "Chưa có dữ liệu"}
-                </small>
-              </p>
+              {hasWearableData && current && !current.fresh ? (
+                // Mất kết nối: không giữ mức "Bình thường" cũ, nói rõ không nhận được SpO₂.
+                <p className="mt-1 text-4xl font-extrabold text-[#9EB4CC]">
+                  —{" "}
+                  <small className="text-sm text-red-600">Mất tín hiệu SpO₂</small>
+                </p>
+              ) : (
+                <p className={`mt-1 text-4xl font-extrabold ${hasWearableData ? latestLevelStyle.text : "text-[#5A7799]"}`}>
+                  {hasWearableData
+                    ? formatSpo2(current?.reading?.spo2 ?? latestSampleSpo2 ?? latestAssessment?.spo2_now ?? null)
+                    : "—"}{" "}
+                  <small className="text-sm">
+                    {hasWearableData ? latestLevelStyle.name : "Chưa có dữ liệu"}
+                  </small>
+                </p>
+              )}
             </div>
             <div className="flex-1 pl-8">
               <span className="text-xs uppercase tracking-wide text-[#5A7799]">
                 Âm phổi AI
               </span>
               <p className="mt-1 font-extrabold text-[#5A7799]">
-                {isNguyenVanA ? "Normal / Crackle" : hasClinicalData ? <SoundLabel value={patient.sound} /> : "Chưa có dữ liệu"}
+                {hasClinicalData ? <SoundLabel value={patient.sound} /> : "Chưa có dữ liệu"}
               </p>
-              {isNguyenVanA && <p className="mt-1 text-xs text-[#5A7799]">Có ghi nhận một số đoạn Wheeze</p>}
             </div>
           </div>
           {!isArchived && <Link
@@ -378,7 +383,7 @@ export function PatientDetail({
                   </p>
                 </div>
                 <div className="flex rounded-xl bg-[#F1F6FB] p-1 text-sm">
-                  {spo2Ranges.map((rangeItem) => (
+                  {WEARABLE_RANGES.map((rangeItem) => (
                     <button
                       key={rangeItem.id}
                       type="button"
@@ -394,10 +399,18 @@ export function PatientDetail({
                   ))}
                 </div>
               </div>
-              <div className="mt-12">
-                {currentSpo2Data.length > 0 ? (
+              <div className="mt-5">
+                <WearableConnectionBanner
+                  device={wearable.data?.device ?? null}
+                  uploadIntervalMin={wearableConfig?.upload_interval_min}
+                  loading={wearable.loading && !wearable.data}
+                />
+              </div>
+              <div className="mt-6">
+                {hasChartData(currentSpo2Data) ? (
                   <Spo2Chart
                     data={currentSpo2Data}
+                    range={spo2Range}
                     threshold={wearableConfig?.T}
                     criticalThreshold={wearableConfig?.critical.crit_T}
                   />
@@ -407,12 +420,20 @@ export function PatientDetail({
                   </div>
                 )}
               </div>
+              <p className="mt-2 text-xs text-[#5A7799]">{RANGE_SPEC[spo2Range].note} · Đoạn trống: không có số đo (mất kết nối hoặc không đeo vòng)</p>
               <div className="mt-4 grid grid-cols-3 border-t border-[#E1ECF7] pt-5 text-center">
                 <div>
                   <small className="text-[#5A7799]">Hiện tại</small>
-                  <p className="mt-1 text-xl font-extrabold text-[#EF4444]">
-                    {formatSpo2(spo2Summary.current)}
-                  </p>
+                  {current && !current.fresh && current.reading ? (
+                    <>
+                      <p className="mt-1 text-xl font-extrabold text-[#9EB4CC]">—</p>
+                      <p className="text-[11px] font-semibold text-red-600">Mất tín hiệu</p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-xl font-extrabold text-[#EF4444]">
+                      {formatSpo2(current?.reading?.spo2 ?? spo2Summary.current)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <small className="text-[#5A7799]">Trung bình</small>

@@ -17,7 +17,7 @@ export async function GET(request: NextRequest, { params }: Context) {
   const { id } = await params;
   if (!uuidPattern.test(id)) return apiError(404, "NOT_FOUND", "Không tìm thấy bệnh nhân.");
   const range = request.nextUrl.searchParams.get("range") ?? "24h";
-  if (!isWearableRange(range)) return apiError(400, "VALIDATION_ERROR", "range là 24h, 7d hoặc 30d.");
+  if (!isWearableRange(range)) return apiError(400, "VALIDATION_ERROR", "range là 6h, 24h, 7d hoặc 30d.");
   try {
     const [patient] = await db
       .select({ id: patients.id })

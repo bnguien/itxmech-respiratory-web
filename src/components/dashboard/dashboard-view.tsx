@@ -8,7 +8,8 @@ import { StartVisitModal } from "@/components/visits/start-visit-modal";
 import { useDashboardOverview } from "@/lib/dashboard/use-dashboard-overview";
 import { formatSpo2 } from "@/lib/wearable/presentation";
 import { usePatientWearable } from "@/lib/wearable/use-patient-wearable";
-import type { WearableRange } from "@/lib/wearable/chart";
+import { WEARABLE_RANGES, hasChartData, type WearableRange } from "@/lib/wearable/chart";
+import { WearableConnectionBanner } from "@/components/patients/wearable-connection";
 
 export function DashboardView() {
   const [open, setOpen] = useState(false);
@@ -250,13 +251,7 @@ function FocusSpo2Chart({ patientId, patientName }: { patientId: string; patient
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-sm font-bold">Xu hướng SpO₂</h2>
                 <div className="flex rounded-xl bg-[#F1F6FB] p-1 text-xs">
-                  {(
-                    [
-                      ["24h", "24 giờ"],
-                      ["7d", "7 ngày"],
-                      ["30d", "30 ngày"],
-                    ] as const
-                  ).map(([id, label]) => (
+                  {WEARABLE_RANGES.map(({ id, label }) => (
                     <button
                       key={id}
                       type="button"
@@ -286,9 +281,12 @@ function FocusSpo2Chart({ patientId, patientName }: { patientId: string; patient
               — SpO₂ (%) &nbsp; <i className="text-red-500">-- Ngưỡng T {T ?? "—"}%</i>
             </span>
           </div>
-          <div className="mt-6">
-            {data && data.chart.length > 0 ? (
-              <Spo2Chart data={data.chart} threshold={T} criticalThreshold={data.config.critical.crit_T} />
+          <div className="mt-4">
+            <WearableConnectionBanner device={data?.device ?? null} uploadIntervalMin={data?.config.upload_interval_min} loading={!data} compact />
+          </div>
+          <div className="mt-4">
+            {data && hasChartData(data.chart) ? (
+              <Spo2Chart data={data.chart} range={spo2Range} threshold={T} criticalThreshold={data.config.critical.crit_T} />
             ) : (
               <p className="py-16 text-center text-sm text-[#5A7799]">Chưa có số đo trong khoảng này.</p>
             )}

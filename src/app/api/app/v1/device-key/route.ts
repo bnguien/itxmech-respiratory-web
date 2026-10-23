@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { appError, readJsonObject } from "@/lib/app-api/http";
+import { appError, readJsonObject, withAppErrors } from "@/lib/app-api/http";
 import { authorizeApp, ensureDeviceForPatient, issueDeviceKey } from "@/lib/app-api/server";
 
 const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{3,40}$/;
@@ -9,7 +9,7 @@ const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{3,40}$/;
  * qua BLE (WIFI_PROV op 0x03). Vòng dùng khóa trong header `x-device-key` khi tự gửi dữ liệu qua WiFi.
  * Mỗi lần gọi tạo khóa mới; khóa cũ hết hiệu lực.
  */
-export async function POST(request: NextRequest) {
+export const POST = withAppErrors("device-key", async (request: NextRequest) => {
   const auth = await authorizeApp(request);
   if (auth.response) return auth.response;
   const body = await readJsonObject(request);
@@ -20,4 +20,4 @@ export async function POST(request: NextRequest) {
   if (!owner.ok) return owner.response;
   const key = await issueDeviceKey(deviceId);
   return NextResponse.json({ device_id: deviceId, device_key: key });
-}
+});

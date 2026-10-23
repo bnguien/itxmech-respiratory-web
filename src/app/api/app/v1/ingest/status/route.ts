@@ -2,13 +2,13 @@ import { eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { wearableDevices } from "@/lib/db/schema/wearables";
-import { appError, readJsonObject } from "@/lib/app-api/http";
+import { appError, readJsonObject, withAppErrors } from "@/lib/app-api/http";
 import { authorizeIngest, ensureDeviceForPatient } from "@/lib/app-api/server";
 import { latestConfigVersion } from "@/lib/monitoring/server";
 import { validateStatus } from "@/lib/app-api/validation";
 
 /** Pin, trạng thái đeo, backlog, config đang áp dụng của vòng. */
-export async function POST(request: NextRequest) {
+export const POST = withAppErrors("ingest/status", async (request: NextRequest) => {
   const auth = await authorizeIngest(request);
   if (auth.response) return auth.response;
   const parsed = validateStatus(await readJsonObject(request));
@@ -38,4 +38,4 @@ export async function POST(request: NextRequest) {
     .where(eq(wearableDevices.deviceId, s.device_id));
 
   return NextResponse.json({ config_version_latest: await latestConfigVersion(auth.patientId), server_time: Math.floor(Date.now() / 1000) });
-}
+});

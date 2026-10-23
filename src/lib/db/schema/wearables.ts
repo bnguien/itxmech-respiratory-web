@@ -130,5 +130,70 @@ export const wearableAssessments = pgTable(
   ],
 );
 
+/**
+ * Số hiển thị mới nhất của vòng (LIVE v2, gộp 15 giây). Một dòng mỗi vòng, ghi đè: app người nhà và web đọc
+ * cùng số với máy đang nối vòng. Lịch sử vẫn là vitals_minute.
+ */
+export const wearableLive = pgTable(
+  "wearable_live",
+  {
+    deviceId: text("device_id")
+      .primaryKey()
+      .references(() => wearableDevices.deviceId),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patients.id, { onDelete: "cascade" }),
+    ts: timestamp("ts", { withTimezone: true, mode: "string" }).notNull(),
+    spo2: real("spo2"),
+    spo2Min: real("spo2_min"),
+    pulse: real("pulse"),
+    sqi: real("sqi"),
+    valid: real("valid").notNull(),
+    worn: boolean("worn").notNull(),
+    transport: text("transport").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("wearable_live_patient_id_idx").on(table.patientId),
+    check("wearable_live_transport_check", sql`${table.transport} in ('ble_relay', 'wifi')`),
+  ],
+);
+
+/** Số liệu hiệu năng của vòng (DIAG), mỗi cửa sổ 5 phút một dòng. */
+export const deviceDiagnostics = pgTable(
+  "device_diagnostics",
+  {
+    deviceId: text("device_id")
+      .notNull()
+      .references(() => wearableDevices.deviceId),
+    bootId: integer("boot_id").notNull(),
+    uptimeS: bigint("uptime_s", { mode: "number" }).notNull(),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patients.id, { onDelete: "cascade" }),
+    ts: timestamp("ts", { withTimezone: true, mode: "string" }).notNull(),
+    cpuAvgPct: real("cpu_avg_pct"),
+    cpuPeakPct: real("cpu_peak_pct"),
+    modelMs: real("model_ms"),
+    minuteMs: real("minute_ms"),
+    flashMs: real("flash_ms"),
+    heapMinKb: smallint("heap_min_kb"),
+    wifiS: smallint("wifi_s"),
+    resetReason: text("reset_reason").notNull(),
+    bleDrops: smallint("ble_drops"),
+    transport: text("transport").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "device_diagnostics_pk", columns: [table.deviceId, table.bootId, table.uptimeS] }),
+    index("device_diagnostics_device_ts_idx").on(table.deviceId, table.ts),
+    check("device_diagnostics_transport_check", sql`${table.transport} in ('ble_relay', 'wifi')`),
+  ],
+);
+
 export type WearableDeviceRow = typeof wearableDevices.$inferSelect;
 export type VitalsMinuteRow = typeof vitalsMinute.$inferSelect;

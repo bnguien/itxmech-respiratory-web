@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
+import { pushToPatient } from "@/lib/push/fcm";
 import { db } from "@/lib/db";
 import { doctorNotes } from "@/lib/db/schema/doctor-notes";
 import { cleanNoteContent, listNotes, NOTE_MAX_LENGTH } from "@/lib/notes/server";
@@ -12,7 +13,7 @@ const uuidPattern =
 const target = (patientId: string, noteId: string) =>
   and(eq(doctorNotes.id, noteId), eq(doctorNotes.patientId, patientId), isNull(doctorNotes.deletedAt));
 
-/** Sửa lời dặn: app thấy nội dung mới ở lần tải sau. */
+/** Sửa lời dặn: app nhận tin, tải lại và báo "bác sĩ đã sửa lời dặn" (DoctorNoteWatcher). */
 export async function PATCH(request: NextRequest, { params }: Context) {
   const auth = await authorizeDoctor();
   if (auth.response) return auth.response;
@@ -32,6 +33,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       .where(target(id, noteId))
       .returning({ id: doctorNotes.id });
     if (updated.length === 0) return apiError(404, "NOT_FOUND", "Không tìm thấy lời dặn.");
+    after(() => pushToPatient(id, { type: "note_updated", note_id: noteId }));
     return NextResponse.json({ data: await listNotes(id) });
   } catch (error) {
     console.error("Unable to update note", error);

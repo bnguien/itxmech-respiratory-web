@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
+import { pushToPatient } from "@/lib/push/fcm";
 import { db } from "@/lib/db";
 import { doctorNotes } from "@/lib/db/schema/doctor-notes";
 import { patients } from "@/lib/db/schema/patients";
@@ -43,7 +44,9 @@ export async function POST(request: NextRequest, { params }: Context) {
   if (!content) return validationError([{ field: "content", message: `Lời dặn từ 1 đến ${NOTE_MAX_LENGTH} ký tự.` }]);
   try {
     if (!(await activePatientExists(id))) return apiError(404, "NOT_FOUND", "Không tìm thấy bệnh nhân.");
-    await db.insert(doctorNotes).values({ patientId: id, doctorId: auth.doctorId, content });
+    const [note] = await db.insert(doctorNotes).values({ patientId: id, doctorId: auth.doctorId, content }).returning({ id: doctorNotes.id });
+    // App nhận tin rồi tự tải lại và hiện một thông báo lời dặn (DoctorNoteWatcher), kể cả khi đang chạy nền.
+    after(() => pushToPatient(id, { type: "note_added", note_id: note.id }));
     return NextResponse.json({ data: await listNotes(id) }, { status: 201 });
   } catch (error) {
     console.error("Unable to create note", error);

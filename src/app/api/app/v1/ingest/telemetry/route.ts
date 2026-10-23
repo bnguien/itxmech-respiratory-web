@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { vitalsMinute, wearableDevices } from "@/lib/db/schema/wearables";
-import { appError, epochToIso, readJsonObject } from "@/lib/app-api/http";
+import { appError, epochToIso, readJsonObject, withAppErrors } from "@/lib/app-api/http";
 import { authorizeIngest, ensureDeviceForPatient } from "@/lib/app-api/server";
 import { latestConfigVersion } from "@/lib/monitoring/server";
 import { validateTelemetry } from "@/lib/app-api/validation";
@@ -12,7 +12,7 @@ import { validateTelemetry } from "@/lib/app-api/validation";
  * acked_seq = seq lớn nhất trong lô: mọi bản ghi hợp lệ đã có trong DB sau lệnh này; bản ghi chưa có giờ
  * thật (vòng chưa đồng bộ giờ) bị bỏ hẳn, vẫn tính vào acked_seq để app không gửi lại mãi.
  */
-export async function POST(request: NextRequest) {
+export const POST = withAppErrors("ingest/telemetry", async (request: NextRequest) => {
   const auth = await authorizeIngest(request);
   if (auth.response) return auth.response;
   const parsed = validateTelemetry(await readJsonObject(request));
@@ -70,4 +70,4 @@ export async function POST(request: NextRequest) {
     config_version_latest: await latestConfigVersion(auth.patientId),
     server_time: Math.floor(Date.now() / 1000),
   });
-}
+});
